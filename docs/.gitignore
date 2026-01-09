@@ -1,3 +1,4 @@
 # Ignore all Obsidian workspace and cache files
 .obsidian/workspace*
 .obsidian/cache*
+.obsidian/appearance.json
