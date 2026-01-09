@@ -1,0 +1,44 @@
+{
+  "collapse-filter": false,
+  "search": "-path:Notes/Archive -path:_ -path:University",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:Notes  ",
+      "color": {
+        "a": 1,
+        "rgb": 6902496
+      }
+    },
+    {
+      "query": "file:Diary",
+      "color": {
+        "a": 1,
+        "rgb": 14725458
+      }
+    },
+    {
+      "query": "path:⏳  ",
+      "color": {
+        "a": 1,
+        "rgb": 14701138
+      }
+    }
+  ],
+  "collapse-display": true,
+  "showArrow": true,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.665978206680436,
+  "repelStrength": 3.74902072501959,
+  "linkStrength": 0.392493412150132,
+  "linkDistance": 146,
+  "scale": 0.6906394797599789,
+  "close": true
+}

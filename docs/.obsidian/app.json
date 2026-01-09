@@ -1,0 +1,14 @@
+{
+  "showInlineTitle": false,
+  "showLineNumber": false,
+  "foldIndent": false,
+  "strictLineBreaks": false,
+  "readableLineLength": true,
+  "alwaysUpdateLinks": true,
+  "pdfExportSettings": {
+    "pageSize": "Legal",
+    "landscape": false,
+    "margin": "0",
+    "downscalePercent": 80
+  }
+}

@@ -1,0 +1,254 @@
+{
+	"nodes":[
+		{"id":"721af85c4a9b48d9","type":"group","x":-1680,"y":-860,"width":1980,"height":1200,"color":"5","label":"Auth DB: PostgreSQL"},
+		{"id":"2f6ff8f094022843","type":"group","x":-1680,"y":-1980,"width":1980,"height":1040,"color":"5","label":"Notes DB: PostgreSQL"},
+		{"id":"0c43815634493b6d","type":"group","x":-1060,"y":420,"width":740,"height":560,"color":"6","label":"Vector DB: ChromaDB"},
+		{"id":"c01891513866fc2b","type":"group","x":380,"y":-500,"width":620,"height":480,"color":"4","label":"Agent Internal DB: MongoDB"},
+		{
+			"id":"81d521d75c980be9",
+			"type":"text",
+			"text":"# Note Tags\n---\n- Note ID: **string**\n- Tag ID: **string**",
+			"styleAttributes":{},
+			"x":-960,
+			"y":-1345,
+			"width":500,
+			"height":260
+		},
+		{
+			"id":"90c03ccdedbbd06e",
+			"type":"text",
+			"text":"# Notes\n---\n- User ID: **string**\n- Note ID: **string**\n- Created At: **datetime**\n- Updated At: **datetime**\n- Deleted At: **datetime**\n- Title: **string**\n- Content: **string**",
+			"styleAttributes":{},
+			"x":-1620,
+			"y":-1437,
+			"width":500,
+			"height":437
+		},
+		{
+			"id":"fd17b8d4f48e7f61",
+			"type":"text",
+			"text":"# Notes Snapshots\n---\n- Snap ID: **string**\n- Note ID: **string**\n- Created At: **datetime**\n- Title: **string**\n- Content: **string**",
+			"styleAttributes":{},
+			"x":-1620,
+			"y":-1920,
+			"width":500,
+			"height":360,
+			"color":"6"
+		},
+		{
+			"id":"75d36b1d87a343ad",
+			"type":"text",
+			"text":"# Tags\n---\n- Tag ID: **string**\n- User ID: **string**\n- Tag name: **string**\n",
+			"styleAttributes":{},
+			"x":-260,
+			"y":-1355,
+			"width":500,
+			"height":280
+		},
+		{
+			"id":"45301f8d289b809f",
+			"type":"text",
+			"text":"# Outbox\n---\n- Event ID: **string**\n- Note ID: **string**\n- Event Type: **string**\n- Created At: **datetime**",
+			"styleAttributes":{},
+			"x":-960,
+			"y":-1920,
+			"width":500,
+			"height":320
+		},
+		{
+			"id":"d628fba435115c21",
+			"type":"text",
+			"text":"# Security Events\n---\n- Event ID: **string**\n- User ID: **string**\n- Event Type: **string**\n- IP Address: **string**\n- User Agent: **string**\n- Created At: **datetime**",
+			"styleAttributes":{},
+			"x":-1620,
+			"y":-800,
+			"width":460,
+			"height":400
+		},
+		{
+			"id":"58e3475c97aeed3f",
+			"type":"text",
+			"text":"# Password Reset Tokens\n---\n- Token: **string**\n- User ID: **string**\n- Expires At: **datetime**\n- Used: **bool**",
+			"styleAttributes":{},
+			"x":-1390,
+			"y":-80,
+			"width":660,
+			"height":340
+		},
+		{
+			"id":"e896c702865aba06",
+			"type":"text",
+			"text":"# Email Verification Tokens\n---\n- Token ID: **string**\n- Token Hash: **string**\n- User ID: **string**\n- Expires At: **datetime**\n- Used: **bool**",
+			"styleAttributes":{},
+			"x":-650,
+			"y":-80,
+			"width":660,
+			"height":360
+		},
+		{
+			"id":"aa5a957fc36e8401",
+			"type":"text",
+			"text":"# Refresh Tokens\n---\n- ID: **string**\n- User ID: **string**\n- Token Hash: **string**\n- Expires At: **datetime**\n- Revoked At: **datetime**\n- Replaced By Token ID: **string**\n- Created At: **datetime**\n- User Agent: **string**\n- IP Address: **inet**",
+			"styleAttributes":{},
+			"x":-220,
+			"y":-800,
+			"width":460,
+			"height":530
+		},
+		{
+			"id":"678c5019fcb0ebe0",
+			"type":"text",
+			"text":"# Users\n---\n- User ID: **string**\n- Email: **string**\n- Is Email Verified: **bool**\n- Password Hash: **string**\n- Username: **string**\n- Status: **string**\n- Created At: **datetime**",
+			"styleAttributes":{},
+			"x":-940,
+			"y":-800,
+			"width":460,
+			"height":440
+		},
+		{
+			"id":"2ae1ea996b330f3b",
+			"type":"text",
+			"text":"# Notes Collection\n---\n\n - ID: (by ChromaDB)\n - Embedding: **list[float]**\n - metadata:\n\t - User ID: **string**\n\t - Note ID: **string**\n\t - tags: **list[string]**\n\t - deleted: **bool**",
+			"styleAttributes":{},
+			"x":-1000,
+			"y":480,
+			"width":620,
+			"height":440
+		},
+		{
+			"id":"9120663f6ba58215",
+			"type":"text",
+			"text":"# Contexts\n---\n- Context ID: **string**\n- User ID: **string**\n- Updated At: **datetime**\n- Title: **string**\n- Content: **string**",
+			"styleAttributes":{},
+			"x":440,
+			"y":-440,
+			"width":500,
+			"height":360
+		}
+	],
+	"edges":[
+		{
+			"id":"aeb14cae6dbc520d",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"75d36b1d87a343ad",
+			"fromSide":"left",
+			"toNode":"81d521d75c980be9",
+			"toSide":"right",
+			"label":"Tag ID"
+		},
+		{
+			"id":"80cea35d65426916",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromFloating":false,
+			"fromNode":"90c03ccdedbbd06e",
+			"fromSide":"right",
+			"toNode":"81d521d75c980be9",
+			"toSide":"left",
+			"label":"Note ID"
+		},
+		{
+			"id":"eb15dfccee0ccb3b",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromFloating":false,
+			"fromNode":"678c5019fcb0ebe0",
+			"fromSide":"bottom",
+			"toNode":"58e3475c97aeed3f",
+			"toSide":"top",
+			"label":"User ID"
+		},
+		{
+			"id":"24b287529b1253d2",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromFloating":false,
+			"fromNode":"678c5019fcb0ebe0",
+			"fromSide":"bottom",
+			"toNode":"e896c702865aba06",
+			"toSide":"top",
+			"label":"User ID"
+		},
+		{
+			"id":"e11fafba861ba290",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"90c03ccdedbbd06e",
+			"fromSide":"top",
+			"toNode":"fd17b8d4f48e7f61",
+			"toSide":"bottom",
+			"label":"Note ID"
+		},
+		{
+			"id":"09d2c7861197733a",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"678c5019fcb0ebe0",
+			"fromSide":"right",
+			"toNode":"aa5a957fc36e8401",
+			"toSide":"left",
+			"label":"User ID"
+		},
+		{
+			"id":"5f03e6d154167363",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"678c5019fcb0ebe0",
+			"fromSide":"left",
+			"toNode":"d628fba435115c21",
+			"toSide":"right",
+			"label":"User ID"
+		},
+		{
+			"id":"cb4af152f5970ca1",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"90c03ccdedbbd06e",
+			"fromSide":"top",
+			"toNode":"45301f8d289b809f",
+			"toSide":"bottom",
+			"label":"Note ID"
+		},
+		{
+			"id":"87f2a6e4651090ac",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromFloating":false,
+			"fromNode":"721af85c4a9b48d9",
+			"fromSide":"top",
+			"toNode":"2f6ff8f094022843",
+			"toSide":"bottom",
+			"color":"1",
+			"label":"User ID"
+		},
+		{
+			"id":"2f3c84a2d5f6d535",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromFloating":false,
+			"fromNode":"721af85c4a9b48d9",
+			"fromSide":"bottom",
+			"toNode":"0c43815634493b6d",
+			"toSide":"top",
+			"color":"1",
+			"label":"User ID"
+		},
+		{
+			"id":"8cf7cc83c4f3eeea",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"721af85c4a9b48d9",
+			"fromSide":"right",
+			"toNode":"c01891513866fc2b",
+			"toSide":"left",
+			"color":"1",
+			"label":"User ID"
+		}
+	],
+	"metadata":{
+		"version":"1.0-1.0",
+		"frontmatter":{},
+		"startNode":"dee138495b28777b"
+	}
+}

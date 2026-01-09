@@ -1,0 +1,13 @@
+{
+  "cssTheme": "Abyssal",
+  "accentColor": "#1b84c5",
+  "interfaceFontFamily": "Courier Prime,Courier New,Courier,Consolas",
+  "textFontFamily": "Courier New,Courier,Consolas",
+  "monospaceFontFamily": "Courier Prime,Consolas",
+  "showRibbon": true,
+  "nativeMenus": false,
+  "theme": "moonstone",
+  "enabledCssSnippets": [
+    "styles"
+  ]
+}
