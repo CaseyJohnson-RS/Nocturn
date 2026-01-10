@@ -6,6 +6,8 @@
 
 ## Запуск
 
+> Перед запуском убедитесь в правильной настройке переменных окружения и работе базы данных.
+
 Запуск в контейнере
 
 <!-- TODO дописать запуск сервиса авторизации в контейнере -->
@@ -32,7 +34,9 @@ source .venv/bin/activate  # Linux/macOS
 ```
 4. Запускаем ASGI
 ```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --proxy-headers
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --env-file .env.example
+# или
+uvicorn app.main:app --env-file .env.example
 ```
 
 
