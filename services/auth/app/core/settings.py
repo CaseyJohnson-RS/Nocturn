@@ -19,6 +19,14 @@ class Settings(BaseSettings):
             f"{self.db_user}:{self.db_password.get_secret_value()}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
+    
+    @property
+    def database_url_sync(self) -> str:
+        return (
+            f"postgresql+psycopg2://"
+            f"{self.db_user}:{self.db_password.get_secret_value()}"
+            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
 
 # MyPy is still stupid about pydantic settings
 settings = Settings() # type: ignore[call-arg]
