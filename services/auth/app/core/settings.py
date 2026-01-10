@@ -1,24 +1,24 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 from pydantic import SecretStr
 
-# MyPy is still stupid about pydantic settings
-
-class DBSettings(BaseSettings):
-    db_name: str  
-    db_user: str  
-    db_password: SecretStr  
-    db_host: str  
-    db_port: int  
-    db_echo: bool  
-
-    model_config = SettingsConfigDict(env_file_encoding="utf8", extra="ignore")  
-
-    @property  
-    def db_url(self):  
-        return f"postgresql+asyncpg://{self.db_user}:{self.db_password.get_secret_value()}@{self.db_host}:{self.db_port}/{self.db_name}"
-
 class Settings(BaseSettings):
-    db_settings: DBSettings = DBSettings() # type: ignore[call-arg]
+    db_name: str
+    db_user: str
+    db_password: SecretStr
+    db_host: str
+    db_port: int
+    db_echo: bool = False
 
+    class Config:
+        extra = "ignore"
 
+    @property
+    def database_url(self) -> str:
+        return (
+            f"postgresql+asyncpg://"
+            f"{self.db_user}:{self.db_password.get_secret_value()}"
+            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
+
+# MyPy is still stupid about pydantic settings
 settings = Settings() # type: ignore[call-arg]
