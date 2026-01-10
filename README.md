@@ -16,6 +16,6 @@ Nocturn — это система для управления заметками
 Для сборки проекта достаточно выполнить команду в корне проекта
 
 ```bash
-docker compose --env-file .env.example up
+docker compose up
 ```
 ---
