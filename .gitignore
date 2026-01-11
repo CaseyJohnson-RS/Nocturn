@@ -1,0 +1,10 @@
+**/.env*
+!**/.env.example
+
+# VSCODE
+**/.vscode
+**/*.code-workspace
+
+# HIDEN FILES
+**/hide*
+**/hidden*
