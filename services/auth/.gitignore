@@ -1,0 +1,13 @@
+# Python
+*.pyc
+__pycache__/
+
+# Environments
+.venv/
+.env*
+!.env.example
+
+# IDEs
+.mypy_cache/
+.pytest_cache/
+.vscode/
