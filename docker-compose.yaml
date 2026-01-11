@@ -1,1 +1,2 @@
 include:
+  - infra/postgres/docker-compose.yaml
