@@ -1,12 +1,11 @@
 services:
   postgres:
     image: postgres:15
-    container_name: postgres
     restart: always
     env_file:
-      - .env
+      - ${PG_ENV_FILE:-.env.db.example}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${PG_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init:/docker-entrypoint-initdb.d
