@@ -5,7 +5,6 @@ COPY . .
 
 RUN uv sync --no-dev
 
-# Проверка нужны ли миграции перед запуском сервиса
 RUN chmod +x /auth-service/entrypoint.sh
 ENTRYPOINT ["/auth-service/entrypoint.sh"]
 
