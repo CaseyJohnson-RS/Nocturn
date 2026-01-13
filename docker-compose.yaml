@@ -1,6 +1,6 @@
 services:
   postgres:
-    profiles: ["infra", "default"]
+    profiles: ["infra", "app"]
     image: postgres:15
     restart: always
     env_file:
@@ -15,9 +15,24 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  
+  auth:
+    profiles: ["auth", "app"]
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile
+    restart: always
+    env_file:
+      - ${AUTH_ENV_FILE:-services/auth/.env.example}
+    ports:
+      - "${AUTH_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  auth_data:
 
 networks:
   default:
