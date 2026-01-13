@@ -1,2 +1,24 @@
-include:
-  - infra/postgres/docker-compose.yaml
+services:
+  postgres:
+    profiles: ["infra", "default"]
+    image: postgres:15
+    restart: always
+    env_file:
+      - ${PG_ENV_FILE:-infra/postgres/.env.db.example}
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_admin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    driver: bridge
