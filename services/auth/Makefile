@@ -6,6 +6,9 @@ db-up:
 db-down:
 	docker compose --env-file $(ENV_FILE) -f docker-compose.db.yaml down -v
 
+alembic-check:
+	uv run --env-file $(ENV_FILE) alembic check
+	
 migrate:
 	uv run --env-file $(ENV_FILE) alembic upgrade head
 
