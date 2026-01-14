@@ -25,9 +25,6 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
-from dotenv import load_dotenv  # noqa: E402
-load_dotenv()
-
 from app.core.settings import settings  # noqa: E402
 config.set_main_option("sqlalchemy.url", settings.database_url_sync)
 

@@ -1,12 +1,14 @@
 from sqlalchemy import Column, String, DateTime
+from sqlalchemy.dialects.postgresql import UUID
 from app.models.base_token import BaseToken
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
+import uuid
 
 
 class RefreshToken(BaseToken):
     __tablename__ = "refresh_tokens"
-    id = Column(String, primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     revoked_at = Column(DateTime, nullable=True)
     replaced_by_token_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
@@ -16,7 +18,7 @@ class RefreshToken(BaseToken):
     user = relationship("User", back_populates="refresh_tokens")
 
     @classmethod
-    def create(cls, token: str, id: str, user_id: str, expires_at: datetime,
+    def create(cls, token: str, id: uuid.UUID, user_id: uuid.UUID, expires_at: datetime,
                user_agent: str = None, ip_address: str = None, replaced_by_token_id: str = None):
         return cls(
             id=id,

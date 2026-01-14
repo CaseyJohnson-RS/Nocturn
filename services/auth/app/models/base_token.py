@@ -1,11 +1,12 @@
 from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from app.models.base import Base
 import hashlib
 
 class BaseToken(Base):
     __abstract__ = True
     token_hash = Column(String, nullable=False)
-    user_id = Column(String, ForeignKey("users.user_id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False)
 
     @staticmethod

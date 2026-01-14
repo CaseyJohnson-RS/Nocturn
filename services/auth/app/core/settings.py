@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     db_host: str
     db_port: int
     db_echo: bool = False
+    debug: bool = False
 
     class Config:
         extra = "ignore"

@@ -1,12 +1,14 @@
 from sqlalchemy import Column, String, Boolean, DateTime
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
+import uuid
 from app.models.base import Base
 
 class User(Base):
     __tablename__ = "users"
 
-    user_id = Column(String, primary_key=True, index=True)
+    user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     email = Column(String, unique=True, nullable=False, index=True)
     is_email_verified = Column(Boolean, default=False, nullable=False)
     password_hash = Column(String, nullable=False)

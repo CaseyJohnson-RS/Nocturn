@@ -6,6 +6,7 @@
 .vscode
 .pytest_cache
 **/README.md
+docker-compose*.yml
 Makefile
 Dockerfile
 tests/
