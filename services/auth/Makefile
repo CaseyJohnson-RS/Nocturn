@@ -1,3 +1,4 @@
+MAKEFLAGS += --silent
 ENV_FILE ?= .env.example
 
 db-up:
@@ -22,6 +23,19 @@ run:
 	uv run --env-file $(ENV_FILE) uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 
-# TODO: unit tests
+test-unit:
+	@echo "Running unit tests..."
+	uv run --env-file $(ENV_FILE) pytest app/registration
 
-# TODO: integration tests
+test-integration: db-down
+	@echo "Waiting 3 seconds after db-down..."
+	@sleep 3
+	@make db-up
+	@echo "Waiting 3 seconds for DB to be ready..."
+	@sleep 3
+	@make migrate
+	@sleep 1
+	@echo "Running integration tests..."
+	uv run --env-file $(ENV_FILE) pytest app/repositories
+
+test: test-unit test-integration

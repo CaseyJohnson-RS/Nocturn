@@ -1,0 +1,27 @@
+from app.core.db import async_session_factory
+
+from .users import UserRepository
+from .email_verification_tokens import EmailVerificationTokenRepository
+from .email_outbox import EmailOutboxRepository
+
+
+class UnitOfWork:
+    def __init__(self):
+        self._session_factory = async_session_factory
+
+    async def __aenter__(self):
+        self.session = self._session_factory()
+        await self.session.__aenter__()
+        self.tx = self.session.begin()
+        await self.tx.__aenter__()
+
+        self.users = UserRepository(self.session)
+        self.email_tokens = EmailVerificationTokenRepository(self.session)
+        self.email_outbox = EmailOutboxRepository(self.session)
+        # self.security_events = 
+
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.tx.__aexit__(exc_type, exc, tb)
+        await self.session.__aexit__(exc_type, exc, tb)
