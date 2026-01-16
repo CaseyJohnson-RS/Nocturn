@@ -1,8 +1,8 @@
 import uuid
 
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, DateTime
+from sqlalchemy import ForeignKey, String, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID, INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,8 +43,8 @@ class SecurityEvent(Base):
         index=False,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        default=func.now(),
         nullable=False,
         unique=False,
         index=False,
@@ -54,3 +54,18 @@ class SecurityEvent(Base):
         "User",
         back_populates="security_events"
     )
+
+    @classmethod
+    def create(
+        cls,
+        user_id: uuid.UUID,
+        event_type: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None
+    ) -> "SecurityEvent":
+        return cls(
+            user_id=user_id,
+            event_type=event_type,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )

@@ -1,16 +1,18 @@
 import uuid
 
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 
 from .base import Base
 from .email_verification_token import EmailVerificationToken
 from .password_reset_token import PasswordResetToken
 from .refresh_token import RefreshToken
 from .security_event import SecurityEvent
+from .email_outbox import EmailOutbox
 
 
 class User(Base):
@@ -38,7 +40,7 @@ class User(Base):
         nullable=False
     )
     username: Mapped[str] = mapped_column(
-        String(255),
+        String(50),
         default="Unknown",
         unique=False,
         nullable=False
@@ -49,8 +51,8 @@ class User(Base):
         nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        default=func.now(),
         nullable=False
     )
 
@@ -74,3 +76,16 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
+    email_outbox: Mapped[list[EmailOutbox]] = relationship(
+        EmailOutbox,
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
+    @classmethod
+    def create(cls, email: str, password_hash: str, username: str = "Unknown") -> "User":
+        return cls(
+            email=email,
+            password_hash=password_hash,
+            username=username
+        )

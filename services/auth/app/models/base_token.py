@@ -1,4 +1,3 @@
-import hashlib
 import uuid
 
 from datetime import datetime
@@ -30,15 +29,6 @@ class BaseToken(Base):
         index=True
     )
     expires_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
     )
-
-    @staticmethod
-    def hash_token(token: str) -> str:
-        """Returns the SHA-256 hash of the given token"""
-        return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-    def verify_token(self, token: str) -> bool:
-        """Checks if the hash of the given token matches the stored hash"""
-        return self.token_hash == self.hash_token(token)

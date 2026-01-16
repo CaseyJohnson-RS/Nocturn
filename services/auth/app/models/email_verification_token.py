@@ -19,9 +19,9 @@ class EmailVerificationToken(BaseToken):
     )
 
     @classmethod
-    def create(cls, token: str, user_id: uuid.UUID, expires_at: datetime):
+    def create(cls, token_hash: str, user_id: uuid.UUID, expires_at: datetime):
         return cls(
-            token_hash=cls.hash_token(token),
+            token_hash=token_hash,
             user_id=user_id,
             expires_at=expires_at,
         )
