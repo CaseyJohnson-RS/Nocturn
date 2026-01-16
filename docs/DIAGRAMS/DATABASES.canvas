@@ -5,57 +5,6 @@
 		{"id":"0c43815634493b6d","type":"group","x":-1060,"y":420,"width":740,"height":560,"color":"6","label":"Vector DB: ChromaDB"},
 		{"id":"c01891513866fc2b","type":"group","x":380,"y":-500,"width":620,"height":480,"color":"4","label":"Agent Internal DB: MongoDB"},
 		{
-			"id":"81d521d75c980be9",
-			"type":"text",
-			"text":"# Note Tags\n---\n- Note ID: **string**\n- Tag ID: **string**",
-			"styleAttributes":{},
-			"x":-960,
-			"y":-1345,
-			"width":500,
-			"height":260
-		},
-		{
-			"id":"90c03ccdedbbd06e",
-			"type":"text",
-			"text":"# Notes\n---\n- User ID: **string**\n- Note ID: **string**\n- Created At: **datetime**\n- Updated At: **datetime**\n- Deleted At: **datetime**\n- Title: **string**\n- Content: **string**",
-			"styleAttributes":{},
-			"x":-1620,
-			"y":-1437,
-			"width":500,
-			"height":437
-		},
-		{
-			"id":"fd17b8d4f48e7f61",
-			"type":"text",
-			"text":"# Notes Snapshots\n---\n- Snap ID: **string**\n- Note ID: **string**\n- Created At: **datetime**\n- Title: **string**\n- Content: **string**",
-			"styleAttributes":{},
-			"x":-1620,
-			"y":-1920,
-			"width":500,
-			"height":360,
-			"color":"6"
-		},
-		{
-			"id":"75d36b1d87a343ad",
-			"type":"text",
-			"text":"# Tags\n---\n- Tag ID: **string**\n- User ID: **string**\n- Tag name: **string**\n",
-			"styleAttributes":{},
-			"x":-260,
-			"y":-1355,
-			"width":500,
-			"height":280
-		},
-		{
-			"id":"45301f8d289b809f",
-			"type":"text",
-			"text":"# Outbox\n---\n- Event ID: **string**\n- Note ID: **string**\n- Event Type: **string**\n- Created At: **datetime**",
-			"styleAttributes":{},
-			"x":-960,
-			"y":-1920,
-			"width":500,
-			"height":320
-		},
-		{
 			"id":"d628fba435115c21",
 			"type":"text",
 			"text":"# Security Events\n---\n- Event ID: **string**\n- User ID: **string**\n- Event Type: **string**\n- IP Address: **string**\n- User Agent: **string**\n- Created At: **datetime**",
@@ -64,26 +13,6 @@
 			"y":-800,
 			"width":460,
 			"height":400
-		},
-		{
-			"id":"58e3475c97aeed3f",
-			"type":"text",
-			"text":"# Password Reset Tokens\n---\n- Token: **string**\n- User ID: **string**\n- Expires At: **datetime**\n- Used: **bool**",
-			"styleAttributes":{},
-			"x":-1390,
-			"y":-80,
-			"width":660,
-			"height":340
-		},
-		{
-			"id":"e896c702865aba06",
-			"type":"text",
-			"text":"# Email Verification Tokens\n---\n- Token ID: **string**\n- Token Hash: **string**\n- User ID: **string**\n- Expires At: **datetime**\n- Used: **bool**",
-			"styleAttributes":{},
-			"x":-650,
-			"y":-80,
-			"width":660,
-			"height":360
 		},
 		{
 			"id":"aa5a957fc36e8401",
@@ -124,6 +53,87 @@
 			"y":-440,
 			"width":500,
 			"height":360
+		},
+		{
+			"id":"81d521d75c980be9",
+			"type":"text",
+			"text":"# Note Tags\n---\n- Note ID: **string**\n- Tag ID: **string**",
+			"styleAttributes":{},
+			"x":-960,
+			"y":-1345,
+			"width":500,
+			"height":260
+		},
+		{
+			"id":"90c03ccdedbbd06e",
+			"type":"text",
+			"text":"# Notes\n---\n- User ID: **string**\n- Note ID: **string**\n- Created At: **datetime**\n- Updated At: **datetime**\n- Deleted At: **datetime**\n- Title: **string**\n- Content: **string**",
+			"styleAttributes":{},
+			"x":-1620,
+			"y":-1437,
+			"width":500,
+			"height":437
+		},
+		{
+			"id":"75d36b1d87a343ad",
+			"type":"text",
+			"text":"# Tags\n---\n- Tag ID: **string**\n- User ID: **string**\n- Tag name: **string**\n",
+			"styleAttributes":{},
+			"x":-260,
+			"y":-1355,
+			"width":500,
+			"height":280
+		},
+		{
+			"id":"fd17b8d4f48e7f61",
+			"type":"text",
+			"text":"# Notes Snapshots\n---\n- Snap ID: **string**\n- Note ID: **string**\n- Created At: **datetime**\n- Title: **string**\n- Content: **string**",
+			"styleAttributes":{},
+			"x":-1620,
+			"y":-1920,
+			"width":500,
+			"height":360,
+			"color":"6"
+		},
+		{
+			"id":"45301f8d289b809f",
+			"type":"text",
+			"text":"# Outbox\n---\n- Event ID: **string**\n- Note ID: **string**\n- Event Type: **string**\n- Created At: **datetime**",
+			"styleAttributes":{},
+			"x":-960,
+			"y":-1920,
+			"width":500,
+			"height":320
+		},
+		{
+			"id":"e896c702865aba06",
+			"type":"text",
+			"text":"# Email Verification Tokens\n---\n- Token ID: **string**\n- Token Hash: **string**\n- User ID: **string**\n- Expires At: **datetime**\n- Used: **bool**",
+			"styleAttributes":{},
+			"x":-980,
+			"y":-80,
+			"width":640,
+			"height":360
+		},
+		{
+			"id":"58e3475c97aeed3f",
+			"type":"text",
+			"text":"# Password Reset Tokens\n---\n- Token: **string**\n- User ID: **string**\n- Expires At: **datetime**\n- Used: **bool**",
+			"styleAttributes":{},
+			"x":-280,
+			"y":-40,
+			"width":520,
+			"height":320
+		},
+		{
+			"id":"234336715ea31d82",
+			"type":"text",
+			"text":"# Email Outbox\n---\n- id: **UUID**\n- type: **string**\n- user_id: **UUID**\n- email: **string**\n- payload: **string**\n- status: **string**      (pending / sent / failed)\n- attempts: **int**\n- last_error: **string**\n- created_at: **datetime**\n- sent_at: **datetime**",
+			"styleAttributes":{},
+			"x":-1620,
+			"y":-290,
+			"width":460,
+			"height":570
 		}
 	],
 	"edges":[
@@ -243,6 +253,17 @@
 			"toNode":"c01891513866fc2b",
 			"toSide":"left",
 			"color":"1",
+			"label":"User ID"
+		},
+		{
+			"id":"ab247dfcbec52d24",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromFloating":false,
+			"fromNode":"678c5019fcb0ebe0",
+			"fromSide":"bottom",
+			"toNode":"234336715ea31d82",
+			"toSide":"top",
 			"label":"User ID"
 		}
 	],
