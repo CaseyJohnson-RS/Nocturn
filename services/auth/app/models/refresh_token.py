@@ -50,6 +50,7 @@ class RefreshToken(BaseToken):
         replaced_by_token_id: uuid.UUID = None
     ):
         return cls(
+            token_id=uuid.uuid4(),
             token_hash=token_hash,
             user_id=user_id,
             expires_at=expires_at,

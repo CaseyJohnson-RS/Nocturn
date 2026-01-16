@@ -64,6 +64,7 @@ class SecurityEvent(Base):
         user_agent: str | None = None
     ) -> "SecurityEvent":
         return cls(
+            event_id=uuid.uuid4(),
             user_id=user_id,
             event_type=event_type,
             ip_address=ip_address,

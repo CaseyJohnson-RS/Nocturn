@@ -85,6 +85,7 @@ class User(Base):
     @classmethod
     def create(cls, email: str, password_hash: str, username: str = "Unknown") -> "User":
         return cls(
+            user_id=uuid.uuid4(),
             email=email,
             password_hash=password_hash,
             username=username

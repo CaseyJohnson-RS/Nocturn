@@ -83,6 +83,7 @@ class EmailOutbox(Base):
         attempts: int = 0,
     ) -> "EmailOutbox":
         return cls(
+            id=uuid.uuid4(),
             user_id=user_id,
             email_type=email_type,
             email=email,
