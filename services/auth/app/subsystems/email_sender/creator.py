@@ -5,7 +5,7 @@ from .type import EmailType
 from .payloads import VerifyEmailPayload
 
 
-class EmailFactory:
+class EmailOutboxCreator:
 
     @staticmethod
     async def verification_email(user: User, payload: VerifyEmailPayload, email_outbox_repo: EmailOutboxRepository):

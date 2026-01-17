@@ -1,3 +1,3 @@
-from .factory import EmailFactory  # noqa: F401
+from .creator import EmailOutboxCreator  # noqa: F401
 
 # TODO: add worker to this package
