@@ -1,7 +1,7 @@
 from app.core.db import async_session_factory
 
-from .users import UserRepository
-from .email_verification_tokens import EmailVerificationTokenRepository
+from .user import UserRepository
+from .email_verification_token import EmailVerificationTokenRepository
 from .email_outbox import EmailOutboxRepository
 
 
