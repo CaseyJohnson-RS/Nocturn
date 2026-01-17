@@ -18,7 +18,7 @@ async def test_register_user_success(uow_mock, monkeypatch):
 
     # Мок EmailFactory
     monkeypatch.setattr(
-        "app.services.registration.service.EmailFactory.verification_email",
+        "app.services.registration.service.EmailOutboxCreator.verification_email",
         AsyncMock()
     )
 
