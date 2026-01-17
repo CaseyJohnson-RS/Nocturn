@@ -11,8 +11,8 @@ from app.models import EmailVerificationToken, User
 
 from app.repositories import UnitOfWork
 
-from app.workers.email_sender import EmailFactory
-from app.workers.email_sender.payloads import VerifyEmailPayload
+from app.subsystems.email_sender import EmailFactory
+from app.subsystems.email_sender.payloads import VerifyEmailPayload
 
 from app.registration.dto import RegistrationResult, VerifyEmailResult
 
