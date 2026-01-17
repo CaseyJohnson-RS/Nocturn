@@ -1,47 +1,55 @@
 MAKEFLAGS += --silent
+
 ENV_FILE ?= .env.tmp
 EXAMPLE_ENV ?= .env.example
+UV_CMD = uv run --env-file $(ENV_FILE)
+DC_CMD = docker compose --env-file $(ENV_FILE) -f docker-compose.db.yaml
 
-# Генерация временного .env.tmp с подменой DB_HOST
+# Создание временного .env.tmp с подменой DB_HOST
 .env.tmp: $(EXAMPLE_ENV)
-	@echo "Creating temporary env file .env.tmp..."
-	@cp $(EXAMPLE_ENV) .env.tmp
-	@sed -i 's/^DB_HOST=.*/DB_HOST=localhost/' .env.tmp
+	@echo "Creating temporary env file $(ENV_FILE)..."
+	@cp $(EXAMPLE_ENV) $(ENV_FILE)
+	@sed -i 's/^DB_HOST=.*/DB_HOST=localhost/' $(ENV_FILE)
 
+# Docker
 db-up: .env.tmp
-	docker compose --env-file $(ENV_FILE) -f docker-compose.db.yaml up -d
+	$(DC_CMD) up -d
 
 db-down: .env.tmp
-	docker compose --env-file $(ENV_FILE) -f docker-compose.db.yaml down -v
+	$(DC_CMD) down -v
 
+# Alembic
 alembic-check: .env.tmp
-	uv run --env-file $(ENV_FILE) alembic check
-	
+	$(UV_CMD) alembic check
+
 migrate: .env.tmp
-	uv run --env-file $(ENV_FILE) alembic upgrade head
+	$(UV_CMD) alembic upgrade head
 
 revision: .env.tmp
 ifndef MSG
 	$(error MSG is not set. Usage: make revision MSG="your message here")
 endif
-	uv run --env-file $(ENV_FILE) alembic revision --autogenerate -m "$(MSG)"
+	$(UV_CMD) alembic revision --autogenerate -m "$(MSG)"
 
+# Run app
 run: .env.tmp
-	uv run --env-file $(ENV_FILE) uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	$(UV_CMD) uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
+# Tests
 test-unit: .env.tmp
 	@echo "Running unit tests..."
-	uv run --env-file $(ENV_FILE) pytest app/registration
+	$(UV_CMD) pytest app/services
 
 test-integration: db-down .env.tmp
-	@echo "Waiting 3 seconds after db-down..."
-	@sleep 3
-	@make db-up
-	@echo "Waiting 3 seconds for DB to be ready..."
-	@sleep 3
-	@make migrate
+	@echo "Waiting 2 seconds after db-down..."
+	@sleep 2
+	@$(MAKE) db-up
+	@echo "Waiting 2 seconds for DB to be ready..."
+	@sleep 2
+	@$(MAKE) migrate
 	@sleep 1
 	@echo "Running integration tests..."
-	uv run --env-file $(ENV_FILE) pytest app/repositories
+	$(UV_CMD) pytest app/repositories
+	@$(MAKE) db-down
 
 test: test-unit test-integration
