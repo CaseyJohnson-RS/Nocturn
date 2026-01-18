@@ -12,8 +12,3 @@ class RegisterUserSchema(BaseModel):
 class VerifyEmailRequest(BaseModel):
     email: EmailStr
     token: str
-
-class StatusResponce(BaseModel):
-    status: str = Field(
-        default="success"
-    )
