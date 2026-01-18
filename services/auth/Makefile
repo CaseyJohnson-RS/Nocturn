@@ -5,11 +5,12 @@ EXAMPLE_ENV ?= .env.example
 UV_CMD = uv run --env-file $(ENV_FILE)
 DC_CMD = docker compose --env-file $(ENV_FILE) -f docker-compose.db.yaml
 
-# Создание временного .env.tmp с подменой DB_HOST
 .env.tmp: $(EXAMPLE_ENV)
 	@echo "Creating temporary env file $(ENV_FILE)..."
+	@rm -f $(ENV_FILE)
 	@cp $(EXAMPLE_ENV) $(ENV_FILE)
 	@sed -i 's/^POSTGRES_HOST=.*/POSTGRES_HOST=localhost/' $(ENV_FILE)
+	@sed -i 's/^REDIS_HOST=.*/REDIS_HOST=localhost/' $(ENV_FILE)
 
 # Docker
 db-up: .env.tmp

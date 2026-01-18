@@ -10,5 +10,16 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-auth}
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  redis_data:
