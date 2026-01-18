@@ -2,8 +2,8 @@ import uuid
 
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, func
-from sqlalchemy.dialects.postgresql import UUID, INET
+from sqlalchemy import DateTime, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base_token import BaseToken
@@ -25,14 +25,6 @@ class RefreshToken(BaseToken):
         default=func.now(),
         nullable=False
     )
-    user_agent: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True
-    )
-    ip_address: Mapped[str | None] = mapped_column(
-        INET(),
-        nullable=True
-    )
 
     user: Mapped["User"] = relationship(  # noqa: F821 # type: ignore
         "User",
@@ -45,8 +37,6 @@ class RefreshToken(BaseToken):
         token_hash: str,
         user_id: uuid.UUID,
         expires_at: datetime,
-        user_agent: str = None,
-        ip_address: str = None,
         replaced_by_token_id: uuid.UUID = None
     ):
         return cls(
@@ -56,6 +46,4 @@ class RefreshToken(BaseToken):
             expires_at=expires_at,
             revoked_at=None,
             replaced_by_token_id=replaced_by_token_id,
-            user_agent=user_agent,
-            ip_address=ip_address
         )
