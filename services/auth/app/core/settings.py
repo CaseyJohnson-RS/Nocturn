@@ -4,13 +4,18 @@ from pydantic import SecretStr
 
 class Settings(BaseSettings):
 
-    # Database configuration
+    # Postgres configuration
     postgres_db: str
     postgres_user: str
     postgres_password: SecretStr
     postgres_host: str
     postgres_port: int
     postgres_echo: bool = False
+
+    # Redis configuration
+    redis_host: str
+    redis_port: int
+    redis_password: str
 
     # Service configuration
     trust_proxy: bool = False
