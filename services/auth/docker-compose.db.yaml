@@ -2,11 +2,11 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_DB: ${DB_NAME:-auth}
-      POSTGRES_USER: ${DB_USER:-auth}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-auth}
+      POSTGRES_DB: ${POSTGRES_DB:-auth}
+      POSTGRES_USER: ${POSTGRES_USER:-auth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-auth}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 

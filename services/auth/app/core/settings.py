@@ -5,12 +5,12 @@ from pydantic import SecretStr
 class Settings(BaseSettings):
 
     # Database configuration
-    db_name: str
-    db_user: str
-    db_password: SecretStr
-    db_host: str
-    db_port: int
-    db_echo: bool = False
+    postgres_db: str
+    postgres_user: str
+    postgres_password: SecretStr
+    postgres_host: str
+    postgres_port: int
+    postgres_echo: bool = False
 
     # Service configuration
     trust_proxy: bool = False
@@ -30,16 +30,16 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         return (
             f"postgresql+asyncpg://"
-            f"{self.db_user}:{self.db_password.get_secret_value()}"
-            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+            f"{self.postgres_user}:{self.postgres_password.get_secret_value()}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
     @property
     def database_url_sync(self) -> str:
         return (
             f"postgresql+psycopg2://"
-            f"{self.db_user}:{self.db_password.get_secret_value()}"
-            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+            f"{self.postgres_user}:{self.postgres_password.get_secret_value()}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
 # MyPy is still stupid about pydantic settings

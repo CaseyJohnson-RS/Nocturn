@@ -9,7 +9,7 @@ DC_CMD = docker compose --env-file $(ENV_FILE) -f docker-compose.db.yaml
 .env.tmp: $(EXAMPLE_ENV)
 	@echo "Creating temporary env file $(ENV_FILE)..."
 	@cp $(EXAMPLE_ENV) $(ENV_FILE)
-	@sed -i 's/^DB_HOST=.*/DB_HOST=localhost/' $(ENV_FILE)
+	@sed -i 's/^POSTGRES_HOST=.*/POSTGRES_HOST=localhost/' $(ENV_FILE)
 
 # Docker
 db-up: .env.tmp
