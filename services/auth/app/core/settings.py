@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     db_echo: bool = False
 
     # Service configuration
+    trust_proxy: bool = False
     email_token_length: int = 32
     email_token_expiry_minutes: int = 720
 
