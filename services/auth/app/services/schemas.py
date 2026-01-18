@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class StatusResponce(BaseModel):
+class StatusResponse(BaseModel):
     status: str = Field(
         default="success"
     )

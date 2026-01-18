@@ -10,6 +10,12 @@ from app.models import User, EmailVerificationToken
 
 from app.core.time import utc_now
 
+from app.services.registration.exceptions import (
+    InvalidEmailToken,
+    ExpiredEmailToken,
+    EmailDoesNotMatchToken
+)
+
 
 @pytest.mark.asyncio
 async def test_verify_email_success(uow_mock):
@@ -54,7 +60,7 @@ async def test_verify_email_invalid_token(uow_mock):
         token="plain-token"
     )
 
-    with pytest.raises(ValueError, match="Invalid or expired token"):
+    with pytest.raises(InvalidEmailToken):
         await RegistrationService.verify_email(data)
 
 
@@ -77,7 +83,7 @@ async def test_verify_email_expired_token(uow_mock):
         token="plain-token"
     )
 
-    with pytest.raises(ValueError, match="Invalid or expired token"):
+    with pytest.raises(ExpiredEmailToken):
         await RegistrationService.verify_email(data)
 
 
@@ -100,5 +106,5 @@ async def test_verify_email_email_mismatch(uow_mock):
         token="plain-token"
     )
 
-    with pytest.raises(ValueError, match="Email does not match token"):
+    with pytest.raises(EmailDoesNotMatchToken):
         await RegistrationService.verify_email(data)

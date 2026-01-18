@@ -16,6 +16,13 @@ from app.subsystems.email_sender.payloads import VerifyEmailPayload
 
 from app.services.registration.dto import RegistrationResult, VerifyEmailResult
 
+from app.services.registration.exceptions import (
+    UserAlreadyExists,
+    InvalidEmailToken,
+    ExpiredEmailToken,
+    EmailDoesNotMatchToken
+)
+
 
 class RegistrationService:
     @staticmethod
@@ -25,7 +32,7 @@ class RegistrationService:
             # 1. Check if user exists
             user = await uow.users.get_user_by_email(data.email)
             if user:
-                raise ValueError("User already exists")
+                raise UserAlreadyExists()
             
             # 2. Create user and add to the database
             user = User.create(
@@ -67,18 +74,22 @@ class RegistrationService:
             # 1. Retrieve token from the database
             token = await uow.email_tokens.get_token_by_hash(hash_token(data.token))
 
-            # 2. Check if token exists and is valid
-            if not token or token.expires_at < utc_now():
-                raise ValueError("Invalid or expired token")
+            # 2. Check if token exists
+            if not token:
+                raise InvalidEmailToken()
 
-            # 3. Check email matches the token's user
+            # 3. Check token expires
+            if token.expires_at < utc_now():
+                raise ExpiredEmailToken()
+
+            # 4. Check email matches the token's user
             if token.user.email != data.email:
-                raise ValueError("Email does not match token")
-
-            # 4. Mark user's email as verified
+                raise EmailDoesNotMatchToken()
+            
+            # 5. Mark user's email as verified
             await uow.users.set_email_verified(token.user)
 
-            # 5. Mark token as used
+            # 6. Mark token as used
             await uow.email_tokens.mark_token_used(token)
 
             return VerifyEmailResult(

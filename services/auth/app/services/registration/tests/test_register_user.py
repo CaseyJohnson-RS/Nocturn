@@ -6,6 +6,7 @@ import uuid
 from app.services.registration.service import RegistrationService
 from app.services.registration.schemas import RegisterUserSchema
 from app.services.registration.dto import RegistrationResult
+from app.services.registration.exceptions import UserAlreadyExists
 
 
 @pytest.mark.asyncio
@@ -54,5 +55,5 @@ async def test_register_user_already_exists(uow_mock):
         password="password123"
     )
 
-    with pytest.raises(ValueError, match="User already exists"):
+    with pytest.raises(UserAlreadyExists):
         await RegistrationService.register_user(data)
