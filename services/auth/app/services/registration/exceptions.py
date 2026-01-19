@@ -10,10 +10,10 @@ class UserAlreadyExists(RegistrationError):
     message = "User already exists"
 
 class InvalidEmailToken(RegistrationError):
-    message = "Invalid or expired token"
+    message = "Invalid token"
 
 class ExpiredEmailToken(RegistrationError):
-    message = "Invalid or expired token"
+    message = "Expired token"
 
 class EmailDoesNotMatchToken(RegistrationError):
     message = "Email does not match token"

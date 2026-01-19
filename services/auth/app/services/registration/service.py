@@ -11,9 +11,6 @@ from app.models import EmailVerificationToken, User
 
 from app.repositories import UnitOfWork
 
-from app.subsystems.email_sender import EmailOutboxCreator
-from app.subsystems.email_sender.payloads import VerifyEmailPayload
-
 from app.services.registration.dto import RegistrationResult, VerifyEmailResult
 
 from app.services.registration.exceptions import (
@@ -52,14 +49,7 @@ class RegistrationService:
             await uow.email_tokens.add(token)
 
             # 4. Create email notification
-            await EmailOutboxCreator.verification_email(
-                user=user, 
-                payload=VerifyEmailPayload(
-                    username=user.username,
-                    token=token_str
-                ),
-                email_outbox_repo=uow.email_outbox
-            )
+            # TODO: Integrate email queue
 
             return RegistrationResult(
                 user_id=user.user_id,

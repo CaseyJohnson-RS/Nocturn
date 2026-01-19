@@ -12,7 +12,7 @@ from .email_verification_token import EmailVerificationToken
 from .password_reset_token import PasswordResetToken
 from .refresh_token import RefreshToken
 from .security_event import SecurityEvent
-from .email_outbox import EmailOutbox
+from .sent_email import SentEmail
 
 
 class User(Base):
@@ -76,8 +76,8 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
-    email_outbox: Mapped[list[EmailOutbox]] = relationship(
-        EmailOutbox,
+    sent_emails: Mapped[list[SentEmail]] = relationship(
+        SentEmail,
         back_populates="user",
         cascade="all, delete-orphan"
     )
