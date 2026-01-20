@@ -18,10 +18,7 @@ async def test_register_user_success(uow_mock, monkeypatch):
     uow_mock.email_outbox = MagicMock()
 
     # Мок EmailFactory
-    monkeypatch.setattr(
-        "app.services.registration.service.EmailOutboxCreator.verification_email",
-        AsyncMock()
-    )
+    # TODO: Mock email queue
 
     data = RegisterUserSchema(
         email="test@example.com",

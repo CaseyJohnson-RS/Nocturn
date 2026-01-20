@@ -9,7 +9,7 @@ from app.core.time import utc_now
 
 from app.models import EmailVerificationToken, User
 
-from app.repositories import UnitOfWork
+from app.repositories.postgres import UnitOfWork
 
 from app.services.registration.dto import RegistrationResult, VerifyEmailResult
 
