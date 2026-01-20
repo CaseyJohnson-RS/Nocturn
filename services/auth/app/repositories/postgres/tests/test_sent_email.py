@@ -3,7 +3,7 @@ import pytest
 from app.models import User
 from app.models.sent_email import SentEmail
 
-from app.repositories.sent_email import SentEmailRepository
+from app.repositories.postgres.sent_email import SentEmailRepository
 
 
 @pytest.mark.asyncio

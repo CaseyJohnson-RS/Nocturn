@@ -6,7 +6,7 @@ from app.core.time import utc_now
 from app.models.email_verification_token import EmailVerificationToken
 from app.models.user import User
 
-from app.repositories import EmailVerificationTokenRepository
+from app.repositories.postgres import EmailVerificationTokenRepository
 
 
 @pytest.mark.asyncio
