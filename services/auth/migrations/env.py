@@ -17,7 +17,7 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 
-from app.models.base import Base  # noqa: E402
+from app.adapters.outbound.persistence.sqlalchemy.models import Base  # noqa: E402
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -25,7 +25,7 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
-from app.core.settings import settings  # noqa: E402
+from app.infrastructure.settings import settings  # noqa: E402
 config.set_main_option("sqlalchemy.url", settings.database_url_sync)
 
 
