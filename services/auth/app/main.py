@@ -1,10 +1,5 @@
 from fastapi import FastAPI
-from app.services.registration import router as registration_router
+from app.adapters.inbound.http.routers import router as api_router
 
 app = FastAPI()
-
-app.include_router(registration_router)
-
-@app.get("/health")  
-async def health_check():  
-    return {"status": "healthy"}
+app.include_router(api_router, prefix="/api")

@@ -50,7 +50,7 @@ test-integration: db-down .env.tmp
 	@$(MAKE) migrate
 	@sleep 1
 	@echo "Running integration tests..."
-	$(UV_CMD) pytest app/repositories
+	$(UV_CMD) pytest tests/integration
 	@$(MAKE) db-down
 
 test: test-unit test-integration
