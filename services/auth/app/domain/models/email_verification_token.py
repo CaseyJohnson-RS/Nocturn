@@ -1,31 +1,29 @@
-import uuid
+from uuid import UUID, uuid4
 from typing import Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from app.domain.exceptions import (
-    EmailDoesNotMatchToken,
+    UserDoesNotMatchToken,
     TokenAlreadyUsed,
     TokenExpired,
 )
-from .user import User
 from app.utils.time import utc_now
 from app.utils.security import generate_token, hash_token
 
 
 @dataclass
 class EmailVerificationToken:
-    id: uuid.UUID
+    id: UUID
     token_hash: str
-    user_id: uuid.UUID
-    user: User
+    user_id: UUID
     expires_at: datetime
     used: bool = field(default=False)
 
     @classmethod
     def create(
         cls,
-        user: User,
+        user_id: UUID,
         token_length: int,
         expiry: timedelta,
     ) -> Tuple["EmailVerificationToken", str]:
@@ -34,10 +32,9 @@ class EmailVerificationToken:
         expires_at = utc_now() + expiry
 
         token = cls(
-            id=uuid.uuid4(),
+            id=uuid4(),
             token_hash=token_hash_val,
-            user_id=user.id,
-            user=user,
+            user_id=user_id,
             expires_at=expires_at,
             used=False,
         )
@@ -46,10 +43,10 @@ class EmailVerificationToken:
     def mark_as_used(self) -> None:
         self.used = True
 
-    def validate(self, email: str) -> None:
+    def validate(self, user_id: UUID) -> None:
         if self.used:
             raise TokenAlreadyUsed()
         if self.expires_at < utc_now():
             raise TokenExpired()
-        if self.user.email != email:
-            raise EmailDoesNotMatchToken()
+        if self.user_id == user_id:
+            raise UserDoesNotMatchToken()

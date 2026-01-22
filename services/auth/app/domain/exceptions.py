@@ -33,5 +33,5 @@ class TokenExpired(DomainError):
     message = "Token expired"
 
 
-class EmailDoesNotMatchToken(DomainError):
+class UserDoesNotMatchToken(DomainError):
     message = "Email does not match token"

@@ -39,3 +39,7 @@ class User:
         if self.is_email_verified:
             raise EmailAlreadyVerified()
         self.is_email_verified = True
+
+    def update(self, password: str | None = None, username: str | None = None):
+        self.password_hash = hash_password(password) if password else self.password_hash
+        self.username = username if username else self.username
