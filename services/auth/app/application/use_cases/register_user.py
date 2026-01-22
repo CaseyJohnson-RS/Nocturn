@@ -33,17 +33,23 @@ class RegistrationService:
             if user and user.is_email_verified:
                 raise UserAlreadyExists()
 
-            # 2. Create user and add to the database
-            user = User.register(
-                email=data.email,
-                username=data.username,
-                password=data.password,
-            )
+            # 2. Create user or update data
+            if user:
+                user.update(
+                    password=data.password,
+                    username=data.username
+                )
+            else:
+                user = User.register(
+                    email=data.email,
+                    username=data.username,
+                    password=data.password,
+                )
             await self.users.save(user)
 
             # 3. Create email verification token and add to database
-            token, _ = EmailVerificationToken.create(
-                user=user,
+            token, token_string = EmailVerificationToken.create(
+                user_id=user.id,
                 token_length=self.config.get_email_token_length(),
                 expiry=self.config.get_email_token_expiry()
             )
