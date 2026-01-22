@@ -48,5 +48,5 @@ class EmailVerificationToken:
             raise TokenAlreadyUsed()
         if self.expires_at < utc_now():
             raise TokenExpired()
-        if self.user_id == user_id:
+        if self.user_id != user_id:
             raise UserDoesNotMatchToken()

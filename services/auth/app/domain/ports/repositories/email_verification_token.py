@@ -5,7 +5,7 @@ from app.domain.models import EmailVerificationToken
 
 class EmailVerificationTokenRepository(Protocol):
 
-    async def get_token_by_hash(self, token_hash: str) -> EmailVerificationToken | None:
+    async def get_token_by_string(self, token_string: str) -> EmailVerificationToken | None:
         pass
 
     async def save(self, token: EmailVerificationToken):

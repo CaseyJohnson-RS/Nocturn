@@ -11,8 +11,13 @@ class DomainError(Exception):
 # User
 
 
+class UserDoesNotExist(DomainError):
+    message = "User does not exist"
+
+
 class UserAlreadyExists(DomainError):
     message = "User already exists"
+
 
 class EmailAlreadyVerified(DomainError):
     message = "Email already verified"
