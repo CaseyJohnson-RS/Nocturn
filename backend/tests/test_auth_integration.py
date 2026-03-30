@@ -2,6 +2,10 @@
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.auth.models import User
 
 
 # --- Helpers ---
@@ -14,16 +18,16 @@ async def register_user(client: AsyncClient, email="user@test.com", password="Va
     })
 
 
-async def create_confirmed_user(client: AsyncClient, db, email="user@test.com", password="ValidPass1", nickname="testuser"):
-    """Register and confirm a user, return email and password."""
-    await register_user(client, email, password, nickname)
-
-    # Confirm email directly in DB
-    from app.modules.auth.models import User
-    from sqlalchemy import update
+async def confirm_user_email(db: AsyncSession, email: str):
+    """Confirm email directly in DB."""
     await db.execute(update(User).where(User.email == email.lower()).values(is_email_confirmed=True))
     await db.commit()
 
+
+async def create_confirmed_user(client: AsyncClient, db: AsyncSession, email="user@test.com", password="ValidPass1", nickname="testuser"):
+    """Register and confirm a user."""
+    await register_user(client, email, password, nickname)
+    await confirm_user_email(db, email)
     return email, password
 
 
@@ -73,14 +77,14 @@ class TestRegister:
 # --- Login ---
 
 class TestLogin:
-    async def test_login_success(self, client: AsyncClient, db):
+    async def test_login_success(self, client: AsyncClient, db: AsyncSession):
         email, password = await create_confirmed_user(client, db)
         resp = await login_user(client, email, password)
         assert resp.status_code == 200
         assert "access_token" in resp.json()
         assert "refresh_token" in resp.cookies
 
-    async def test_login_wrong_password(self, client: AsyncClient, db):
+    async def test_login_wrong_password(self, client: AsyncClient, db: AsyncSession):
         await create_confirmed_user(client, db)
         resp = await login_user(client, password="WrongPass1")
         assert resp.status_code == 401
@@ -98,7 +102,7 @@ class TestLogin:
 # --- Refresh ---
 
 class TestRefresh:
-    async def test_refresh_success(self, client: AsyncClient, db):
+    async def test_refresh_success(self, client: AsyncClient, db: AsyncSession):
         await create_confirmed_user(client, db)
         login_resp = await login_user(client)
         cookies = login_resp.cookies
@@ -111,7 +115,7 @@ class TestRefresh:
         resp = await client.post("/api/auth/refresh")
         assert resp.status_code == 401
 
-    async def test_refresh_token_rotation(self, client: AsyncClient, db):
+    async def test_refresh_token_rotation(self, client: AsyncClient, db: AsyncSession):
         """After refresh, old refresh token should be invalidated."""
         await create_confirmed_user(client, db)
         login_resp = await login_user(client)
@@ -129,7 +133,7 @@ class TestRefresh:
 # --- Logout ---
 
 class TestLogout:
-    async def test_logout_success(self, client: AsyncClient, db):
+    async def test_logout_success(self, client: AsyncClient, db: AsyncSession):
         await create_confirmed_user(client, db)
         login_resp = await login_user(client)
         cookies = login_resp.cookies
@@ -149,7 +153,7 @@ class TestLogout:
 # --- Me ---
 
 class TestMe:
-    async def test_me_authenticated(self, client: AsyncClient, db):
+    async def test_me_authenticated(self, client: AsyncClient, db: AsyncSession):
         await create_confirmed_user(client, db)
         login_resp = await login_user(client)
         token = login_resp.json()["access_token"]
