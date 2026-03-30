@@ -50,6 +50,11 @@ class AuthRepository:
             update(User).where(User.id == user_id).values(password_hash=password_hash)
         )
 
+    async def update_nickname(self, user_id: uuid.UUID, nickname: str) -> None:
+        await self.db.execute(
+            update(User).where(User.id == user_id).values(nickname=nickname)
+        )
+
     async def set_active(self, user_id: uuid.UUID, is_active: bool) -> None:
         await self.db.execute(
             update(User).where(User.id == user_id).values(is_active=is_active)

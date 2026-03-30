@@ -13,6 +13,7 @@ from app.common.redis import redis_client
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.modules.auth.router import router as auth_router
 from app.modules.notes.router import router as notes_router
+from app.modules.profile.router import router as profile_router
 from app.modules.tags.router import router as tags_router
 from app.seed import seed_admin
 
@@ -56,6 +57,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(profile_router)
 app.include_router(notes_router)
 app.include_router(tags_router)
 
