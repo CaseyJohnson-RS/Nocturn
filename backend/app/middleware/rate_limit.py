@@ -1,8 +1,8 @@
 import time
-from collections.abc import Callable, Awaitable
 
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.common.exceptions import RateLimitError, ServiceUnavailableError
 from app.common.redis import redis_client
@@ -11,68 +11,81 @@ from app.config import settings
 
 async def _check_rate_limit(key: str, limit: int, window: int = 60) -> None:
     """Sliding window rate limiter using Redis."""
-    try:
-        now = time.time()
-        pipe = redis_client.pipeline()
-        pipe.zremrangebyscore(key, 0, now - window)
-        pipe.zadd(key, {str(now): now})
-        pipe.zcard(key)
-        pipe.expire(key, window)
-        results = await pipe.execute()
-        count = results[2]
-        if count > limit:
-            raise RateLimitError("Too many requests")
-    except RateLimitError:
-        raise
-    except Exception:
-        # Redis unavailable — behavior depends on endpoint type
-        raise
+    now = time.time()
+    pipe = redis_client.pipeline()
+    pipe.zremrangebyscore(key, 0, now - window)
+    pipe.zadd(key, {str(now): now})
+    pipe.zcard(key)
+    pipe.expire(key, window)
+    results = await pipe.execute()
+    count = results[2]
+    if count > limit:
+        raise RateLimitError("Too many requests")
 
 
-def _get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
+def _get_client_ip(scope: Scope) -> str:
+    headers = dict(scope.get("headers", []))
+    forwarded = headers.get(b"x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+        return forwarded.decode().split(",")[0].strip()
+    client = scope.get("client")
+    return client[0] if client else "unknown"
 
 
-def _get_user_id(request: Request) -> str | None:
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+def _get_user_id(scope: Scope) -> str | None:
+    headers = dict(scope.get("headers", []))
+    auth_header = headers.get(b"authorization")
+    if not auth_header:
+        return None
+    auth_str = auth_header.decode()
+    if not auth_str.startswith("Bearer "):
         return None
     try:
         from app.modules.auth.service import AuthService
-        payload = AuthService.decode_access_token(auth_header.removeprefix("Bearer "))
+        payload = AuthService.decode_access_token(auth_str.removeprefix("Bearer "))
         return payload.get("sub")
     except Exception:
         return None
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        path = request.url.path
-        method = request.method
+class RateLimitMiddleware:
+    """Pure ASGI rate-limiting middleware (avoids BaseHTTPMiddleware event-loop issues)."""
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope["path"]
+        method = scope["method"]
 
         if method == "OPTIONS" or path in ("/api/health", "/api/docs", "/api/openapi.json"):
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
         try:
-            await self._apply_rate_limit(request, path)
-        except RateLimitError:
-            raise
+            await self._apply_rate_limit(scope, path)
+        except RateLimitError as exc:
+            response = JSONResponse({"detail": exc.detail}, status_code=429)
+            await response(scope, receive, send)
+            return
         except Exception:
-            # Redis down
             if method in ("GET", "HEAD"):
-                # Fail-open for reads (NFR-REL-03)
-                return await call_next(request)
-            raise ServiceUnavailableError("Service temporarily unavailable")
+                await self.app(scope, receive, send)
+                return
+            response = JSONResponse(
+                {"detail": "Service temporarily unavailable"}, status_code=503
+            )
+            await response(scope, receive, send)
+            return
 
-        return await call_next(request)
+        await self.app(scope, receive, send)
 
-    async def _apply_rate_limit(self, request: Request, path: str) -> None:
-        ip = _get_client_ip(request)
+    async def _apply_rate_limit(self, scope: Scope, path: str) -> None:
+        ip = _get_client_ip(scope)
 
         if path.startswith("/api/auth/"):
             if path in ("/api/auth/request-password-reset", "/api/auth/resend-confirmation"):
@@ -85,7 +98,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 await _check_rate_limit(f"rl:auth:{ip}", settings.rate_auth_per_minute)
             return
 
-        user_id = _get_user_id(request)
+        user_id = _get_user_id(scope)
         if not user_id:
             return
 

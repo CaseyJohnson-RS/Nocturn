@@ -34,6 +34,8 @@ async def setup_database():
     """Create all tables once per test session."""
     # Import models so Base.metadata knows about them
     from app.modules.auth.models import User, RefreshToken, VerificationToken  # noqa: F401
+    from app.modules.notes.models import Note, NoteTag  # noqa: F401
+    from app.modules.tags.models import Tag  # noqa: F401
 
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -94,9 +96,9 @@ async def client() -> AsyncGenerator[AsyncClient]:
     main_module.app.router.lifespan_context = original_lifespan
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 async def flush_redis():
-    """Flush Redis test database."""
+    """Flush Redis test database between tests."""
     await redis_client.flushdb()
     yield
     await redis_client.flushdb()

@@ -28,6 +28,7 @@ class NotesRepository:
         result = await self.db.execute(
             select(Note)
             .options(selectinload(Note.tags))
+            .execution_options(populate_existing=True)
             .where(Note.id == note_id, Note.user_id == user_id)
         )
         return result.scalar_one_or_none()
@@ -36,6 +37,7 @@ class NotesRepository:
         result = await self.db.execute(
             select(Note)
             .options(selectinload(Note.tags))
+            .execution_options(populate_existing=True)
             .where(Note.id == note_id, Note.user_id == user_id, Note.deleted_at.is_(None))
         )
         return result.scalar_one_or_none()
@@ -44,6 +46,7 @@ class NotesRepository:
         result = await self.db.execute(
             select(Note)
             .options(selectinload(Note.tags))
+            .execution_options(populate_existing=True)
             .where(Note.id == note_id, Note.user_id == user_id, Note.deleted_at.is_not(None))
         )
         return result.scalar_one_or_none()
@@ -116,8 +119,14 @@ class NotesRepository:
     async def restore_note(self, note: Note) -> Note:
         note.deleted_at = None
         await self.db.flush()
-        await self.db.refresh(note, attribute_names=["tags"])
-        return note
+        # Re-query to properly load relationships (refresh doesn't work for async relationships)
+        result = await self.db.execute(
+            select(Note)
+            .options(selectinload(Note.tags))
+            .execution_options(populate_existing=True)
+            .where(Note.id == note.id)
+        )
+        return result.scalar_one()
 
     async def hard_delete_note(self, note: Note) -> None:
         await self.db.delete(note)
