@@ -1,15 +1,17 @@
 import os
 
-# Set test environment BEFORE any app imports
-os.environ.update({
-    "DATABASE_URL": "postgresql+asyncpg://nocturn:nocturn_test@localhost:5433/nocturn_test",
-    "REDIS_URL": "redis://localhost:6380/0",
-    "JWT_SECRET": "test-secret-key-at-least-32-characters-long",
-    "ADMIN_EMAIL": "admin@test.com",
-    "ADMIN_PASSWORD": "Admin123",
-    "ADMIN_NICKNAME": "admin",
-    "FRONTEND_URL": "http://localhost:3000",
-})
+# Set default test environment BEFORE any app imports.
+# Allow Docker compose or CI to override these values.
+os.environ.setdefault(
+    "DATABASE_URL",
+    "postgresql+asyncpg://nocturn:nocturn_test@localhost:5433/nocturn_test",
+)
+os.environ.setdefault("REDIS_URL", "redis://localhost:6380/0")
+os.environ.setdefault("JWT_SECRET", "test-secret-key-at-least-32-characters-long")
+os.environ.setdefault("ADMIN_EMAIL", "admin@test.com")
+os.environ.setdefault("ADMIN_PASSWORD", "Admin123")
+os.environ.setdefault("ADMIN_NICKNAME", "admin")
+os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager

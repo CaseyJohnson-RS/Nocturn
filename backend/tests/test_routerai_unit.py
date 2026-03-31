@@ -4,7 +4,7 @@ import httpx
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from app.common.routerai import create_embeddings, chat_completion_stream
+from app.common.routerai import create_embeddings, chat_completion_stream, get_model_context_length
 
 _FAKE_REQUEST = httpx.Request("POST", "http://test/embeddings")
 
@@ -65,7 +65,7 @@ class TestCreateEmbeddings:
             await create_embeddings(["test input"])
 
             call_kwargs = instance.post.call_args
-            assert "/embeddings" in call_kwargs.args[0]
+            assert call_kwargs.args[0] == "https://routerai.ru/api/v1/embeddings"
             body = call_kwargs.kwargs["json"]
             assert body["input"] == ["test input"]
             assert "model" in body
@@ -83,6 +83,26 @@ class TestCreateEmbeddings:
 
             with pytest.raises(httpx.HTTPStatusError):
                 await create_embeddings(["fail"])
+
+
+    async def test_get_model_context_length(self):
+        response_data = {
+            "data": [
+                {"id": "deepseek/deepseek-chat-v3.1", "context_length": 8192},
+            ]
+        }
+        mock_response = httpx.Response(200, json=response_data, request=_FAKE_REQUEST)
+
+        with patch("app.common.routerai.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+            instance.get.return_value = mock_response
+            instance.__aenter__ = AsyncMock(return_value=instance)
+            instance.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = instance
+
+            context_length = await get_model_context_length("deepseek/deepseek-chat-v3.1")
+
+        assert context_length == 8192
 
 
 # --- chat_completion_stream ---

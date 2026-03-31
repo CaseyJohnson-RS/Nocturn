@@ -8,8 +8,16 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential libre2-dev && \
     rm -rf /var/lib/apt/lists/*
 
+ARG INSTALL_DEV=false
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN if [ "$INSTALL_DEV" = "true" ]; then \
+      uv sync --frozen --no-dev && \
+      ./.venv/bin/python -m ensurepip && \
+      ./.venv/bin/python -m pip install --upgrade pip && \
+      ./.venv/bin/python -m pip install pytest pytest-asyncio; \
+    else \
+      uv sync --frozen --no-dev; \
+    fi
 
 COPY . .
 

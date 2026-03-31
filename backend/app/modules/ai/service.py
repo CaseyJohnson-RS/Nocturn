@@ -2,11 +2,12 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exceptions import ConflictError, NotFoundError, ValidationError
-from app.common.routerai import chat_completion_stream
+from app.common.routerai import chat_completion_stream, get_model_context_length
 from app.config import settings
 from app.modules.ai.models import ChatMessage
 from app.modules.ai.repository import AIRepository
@@ -25,7 +26,10 @@ SYSTEM_PROMPT = (
     "You are Nocturn AI, a helpful assistant embedded in a note-taking app. "
     "Answer the user's question using the provided note excerpts as context. "
     "If the notes don't contain relevant information, say so honestly. "
-    "Be concise and reference specific notes when possible."
+    "Be concise and reference specific notes when possible. "
+    "When you mention a note, use inline links in the format [[note:<note_id>|<title>]]. "
+    "If you want to propose changes or pending actions, append a JSON object wrapped in <ACTIONS> tags after the answer. "
+    "The object should look like {\"actions\": [ ... ]}."
 )
 
 
@@ -41,6 +45,36 @@ def _build_context_block(notes_content: list[dict]) -> str:
     for i, note in enumerate(notes_content, 1):
         parts.append(f"[Source {i}: {note['title'] or 'Untitled'}]\n{note['content']}")
     return "\n\n---\n\n".join(parts)
+
+
+def _extract_actions(response_text: str) -> tuple[str, list[dict] | dict | None]:
+    """Extract actions JSON from assistant response if present."""
+    start_tag = "<ACTIONS>"
+    end_tag = "</ACTIONS>"
+    start = response_text.find(start_tag)
+    end = response_text.rfind(end_tag)
+
+    if start == -1 or end == -1 or end <= start:
+        return response_text, None
+
+    json_text = response_text[start + len(start_tag) : end].strip()
+    try:
+        actions_payload = json.loads(json_text)
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse assistant actions JSON")
+        return response_text, None
+
+    cleaned = response_text[:start].strip()
+    actions = actions_payload.get("actions") if isinstance(actions_payload, dict) else actions_payload
+    return cleaned, actions
+
+
+def _format_sse_event(payload: dict, event: str | None = None) -> str:
+    parts = []
+    if event:
+        parts.append(f"event: {event}")
+    parts.append(f"data: {json.dumps(payload)}")
+    return "\n".join(parts) + "\n\n"
 
 
 class AIService:
@@ -122,6 +156,7 @@ class AIService:
             session_id=session_id,
             role="user",
             content=content,
+            attached_note_ids=note_ids or None,
             token_estimate=_estimate_tokens(content),
         )
 
@@ -134,11 +169,20 @@ class AIService:
 
         # 4. Stream LLM response
         full_response = []
-        async for delta in chat_completion_stream(llm_messages):
-            full_response.append(delta)
-            yield f"data: {json.dumps({'delta': delta})}\n\n"
+        try:
+            async for delta in chat_completion_stream(llm_messages):
+                full_response.append(delta)
+                yield _format_sse_event({"delta": delta})
+        except Exception as exc:
+            logger.exception("LLM stream failed for session %s", session_id)
+            error_payload = {
+                "error": "AI assistant failed to generate a response. Please try again."
+            }
+            yield _format_sse_event(error_payload)
+            return
 
         response_text = "".join(full_response)
+        response_text, actions = _extract_actions(response_text)
 
         # 5. Save assistant message
         assistant_msg = await self.repo.add_message(
@@ -146,8 +190,12 @@ class AIService:
             role="assistant",
             content=response_text,
             sources=json.dumps(source_ids) if source_ids else None,
+            actions=actions,
             token_estimate=_estimate_tokens(response_text),
         )
+
+        if actions:
+            yield _format_sse_event({"actions": actions}, event="proposal")
 
         # 6. Auto-title the session if it's the first exchange
         if session.title is None:
@@ -156,7 +204,61 @@ class AIService:
 
         # 7. Yield final metadata event
         msg_data = MessageResponse.model_validate(assistant_msg).model_dump(mode="json")
-        yield f"data: {json.dumps({'done': True, 'message': msg_data})}\n\n"
+        yield _format_sse_event({"done": True, "message": msg_data})
+
+    async def confirm_action(
+        self,
+        user_id: uuid.UUID,
+        session_id: uuid.UUID,
+        message_id: uuid.UUID,
+        action_index: int,
+        approved: bool = True,
+    ) -> MessageResponse:
+        session = await self.repo.get_session(session_id, user_id)
+        if not session:
+            raise NotFoundError("Chat session not found")
+
+        assistant_msg = await self.repo.get_message(message_id, session_id)
+        if not assistant_msg or assistant_msg.role != "assistant":
+            raise NotFoundError("Assistant proposal not found")
+
+        actions = assistant_msg.actions
+        if actions is None:
+            raise ValidationError("No proposed actions available for confirmation")
+        if isinstance(actions, dict):
+            actions = [actions]
+        if not isinstance(actions, list):
+            raise ValidationError("Invalid actions payload")
+        if action_index < 0 or action_index >= len(actions):
+            raise ValidationError("Action index out of range")
+
+        selected_action = actions[action_index]
+        if selected_action.get("status") in ("approved", "rejected"):
+            raise ConflictError("This action has already been finalized")
+
+        selected_action["status"] = "approved" if approved else "rejected"
+        selected_action["confirmed_at"] = datetime.now(timezone.utc).isoformat()
+        selected_action["confirmed_by"] = str(user_id)
+
+        updated_actions = [dict(action) if isinstance(action, dict) else action for action in actions]
+        assistant_msg = await self.repo.update_message_actions(assistant_msg, updated_actions)
+
+        confirmation_text = (
+            f"{'Approved' if approved else 'Rejected'} proposed action: "
+            f"{selected_action.get('type', 'unknown')}"
+        )
+        if selected_action.get("detail"):
+            confirmation_text += f" - {selected_action['detail']}"
+
+        await self.repo.add_message(
+            session_id=session_id,
+            role="user",
+            content=confirmation_text,
+            attached_note_ids=None,
+            token_estimate=_estimate_tokens(confirmation_text),
+        )
+
+        return MessageResponse.model_validate(assistant_msg)
 
     async def _gather_context(
         self,
@@ -220,7 +322,7 @@ class AIService:
         # Trim history to fit token budget
         # Budget = model context - system_prompt - safety_margin
         system_tokens = _estimate_tokens(system_content)
-        budget = _token_budget() - system_tokens
+        budget = await _token_budget() - system_tokens
         selected: list[ChatMessage] = []
         used = 0
         for msg in reversed(history):
@@ -236,10 +338,19 @@ class AIService:
         return messages
 
 
-def _token_budget() -> int:
+async def _token_budget() -> int:
     """Rough token budget for conversation history.
 
-    # TODO: replace with actual model context window size from RouterAI config.
-    # For now assume 8k context window — subtract system prompt and safety margin.
+    Use the configured RouterAI context window if provided. If configured to
+    fetch the model context size from RouterAI, resolve it from the model list.
     """
-    return 8000 - settings.system_prompt_tokens - settings.safety_margin_tokens
+    model_window = settings.routerai_llm_context_window
+    if settings.routerai_fetch_model_context_window and settings.routerai_llm_model:
+        fetched = await get_model_context_length(settings.routerai_llm_model)
+        if fetched is not None:
+            model_window = fetched
+
+    return max(
+        model_window - settings.system_prompt_tokens - settings.safety_margin_tokens,
+        0,
+    )

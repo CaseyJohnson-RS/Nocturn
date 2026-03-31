@@ -1,12 +1,16 @@
 """Integration tests for the AI assistant module."""
 
 import json
+import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.modules.ai.service import _token_budget
 
 from app.modules.ai.models import ChatMessage, ChatSession
 from app.modules.auth.models import User
@@ -36,6 +40,12 @@ def auth(token: str) -> dict:
 async def create_session(client: AsyncClient, token: str, title=None) -> dict:
     resp = await client.post("/api/ai/sessions", json={"title": title}, headers=auth(token))
     return resp.json()
+
+
+@pytest.mark.asyncio
+async def test_token_budget_uses_configured_model_window(monkeypatch):
+    monkeypatch.setattr(settings, "routerai_llm_context_window", 4096)
+    assert await _token_budget() == 4096 - settings.system_prompt_tokens - settings.safety_margin_tokens
 
 
 # --- Sessions ---
@@ -217,6 +227,103 @@ class TestSendMessage:
         assert messages[1].role == "assistant"
         assert "Hello from AI" in messages[1].content
 
+    async def _mock_action_stream(*args, **kwargs):
+        yield "Hello "
+        yield '<ACTIONS>{"actions": [{"type": "suggest_edit", "detail": "Update the note title."}]}</ACTIONS>'
+
+    @patch("app.modules.ai.service.chat_completion_stream", side_effect=_mock_action_stream)
+    @patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock)
+    async def test_send_message_saves_actions(
+        self, mock_embed, mock_chat, client: AsyncClient, db: AsyncSession,
+    ):
+        mock_embed.return_value = [[0.1] * 2560]
+        token = await register_and_login(client, db)
+        session = await create_session(client, token)
+
+        resp = await client.post(
+            f"/api/ai/sessions/{session['id']}/messages",
+            json={"message": "Hello AI"},
+            headers=auth(token),
+        )
+        assert resp.status_code == 200
+
+        result = await db.execute(
+            select(ChatMessage).where(
+                ChatMessage.session_id == session["id"],
+                ChatMessage.role == "assistant",
+            )
+        )
+        assistant_msg = result.scalar_one()
+        assert assistant_msg.actions == [{"type": "suggest_edit", "detail": "Update the note title."}]
+        assert "<ACTIONS>" not in assistant_msg.content
+
+    @patch("app.modules.ai.service.chat_completion_stream", side_effect=_mock_action_stream)
+    @patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock)
+    async def test_send_message_emits_proposal_event(
+        self, mock_embed, mock_chat, client: AsyncClient, db: AsyncSession,
+    ):
+        mock_embed.return_value = [[0.1] * 2560]
+        token = await register_and_login(client, db)
+        session = await create_session(client, token)
+
+        resp = await client.post(
+            f"/api/ai/sessions/{session['id']}/messages",
+            json={"message": "Hello AI"},
+            headers=auth(token),
+        )
+        assert resp.status_code == 200
+
+        lines = [line.strip() for line in resp.text.strip().splitlines() if line.strip()]
+        event_names = [line.split(":", 1)[1].strip() for line in lines if line.startswith("event:")]
+        data_payloads = [json.loads(line.split(":", 1)[1].strip()) for line in lines if line.startswith("data:")]
+
+        assert "proposal" in event_names
+        assert any(payload.get("actions") for payload in data_payloads)
+        assert any(payload.get("done") for payload in data_payloads)
+
+    @patch("app.modules.ai.service.chat_completion_stream", side_effect=_mock_action_stream)
+    @patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock)
+    async def test_confirm_action_marks_action_approved(
+        self, mock_embed, mock_chat, client: AsyncClient, db: AsyncSession,
+    ):
+        mock_embed.return_value = [[0.1] * 2560]
+        token = await register_and_login(client, db)
+        session = await create_session(client, token)
+
+        await client.post(
+            f"/api/ai/sessions/{session['id']}/messages",
+            json={"message": "Hello AI"},
+            headers=auth(token),
+        )
+
+        result = await db.execute(
+            select(ChatMessage).where(
+                ChatMessage.session_id == session["id"],
+                ChatMessage.role == "assistant",
+            )
+        )
+        assistant_msg = result.scalar_one()
+
+        resp = await client.post(
+            f"/api/ai/sessions/{session['id']}/messages/{assistant_msg.id}/actions/confirm",
+            json={"action_index": 0, "approved": True},
+            headers=auth(token),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+
+        await db.refresh(assistant_msg)
+        assert data["actions"][0]["status"] == "approved"
+        assert assistant_msg.actions[0]["status"] == "approved"
+
+        result = await db.execute(
+            select(ChatMessage).where(ChatMessage.session_id == session["id"]).order_by(ChatMessage.created_at)
+        )
+        messages = result.scalars().all()
+        assert len(messages) == 3
+        assert messages[-1].role == "user"
+        assert "Approved proposed action" in messages[-1].content
+
     @patch("app.modules.ai.service.chat_completion_stream", side_effect=_mock_stream)
     @patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock)
     async def test_send_message_auto_titles_session(
@@ -278,14 +385,46 @@ class TestSendMessage:
         )
         assert resp.status_code == 200
 
-        # Verify assistant message has sources
+        # Verify user message attached note IDs and assistant message sources
         result = await db.execute(
-            select(ChatMessage).where(
-                ChatMessage.session_id == session["id"],
-                ChatMessage.role == "assistant",
-            )
+            select(ChatMessage).where(ChatMessage.session_id == session["id"]).order_by(ChatMessage.created_at)
         )
-        assistant_msg = result.scalar_one()
+        messages = result.scalars().all()
+        assert messages[0].role == "user"
+        assert messages[0].attached_note_ids == [uuid.UUID(note_id)]
+
+        assistant_msg = messages[1]
         assert assistant_msg.sources is not None
         sources = json.loads(assistant_msg.sources)
         assert note_id in sources
+
+    @patch("app.modules.ai.service.chat_completion_stream", side_effect=_mock_stream)
+    @patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock)
+    async def test_send_message_handles_llm_failure(
+        self, mock_embed, mock_chat, client: AsyncClient, db: AsyncSession,
+    ):
+        async def _broken_stream(*args, **kwargs):
+            if False:
+                yield ""
+            raise RuntimeError("LLM error")
+
+        mock_embed.return_value = [[0.1] * 2560]
+        mock_chat.side_effect = _broken_stream
+
+        token = await register_and_login(client, db)
+        session = await create_session(client, token)
+
+        resp = await client.post(
+            f"/api/ai/sessions/{session['id']}/messages",
+            json={"message": "Hello AI"},
+            headers=auth(token),
+        )
+
+        assert resp.status_code == 200
+        assert "error" in resp.text
+
+        result = await db.execute(
+            select(ChatMessage).where(ChatMessage.session_id == session["id"]))
+        messages = result.scalars().all()
+        assert len(messages) == 1
+        assert messages[0].role == "user"

@@ -10,7 +10,7 @@ from typing import Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 
 revision: str = "004"
 down_revision: Union[str, None] = "003"
@@ -36,6 +36,8 @@ def upgrade() -> None:
         sa.Column("role", sa.String(20), nullable=False),
         sa.Column("content", sa.Text, nullable=False),
         sa.Column("sources", sa.Text, nullable=True),
+        sa.Column("actions", JSONB, nullable=True),
+        sa.Column("attached_note_ids", ARRAY(UUID(as_uuid=True)), nullable=True),
         sa.Column("token_estimate", sa.Integer, nullable=False, server_default=sa.text("0")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     )

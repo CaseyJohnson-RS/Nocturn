@@ -9,6 +9,7 @@ from argon2.exceptions import VerifyMismatchError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.common.email import send_confirmation_email, send_password_reset_email
 from app.common.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schemas import TokenResponse
@@ -77,8 +78,7 @@ class AuthService:
         expires_at = datetime.now(UTC) + timedelta(hours=settings.email_confirm_ttl_hours)
         await self.repo.create_verification_token(user.id, "email_confirm", token_hash, expires_at)
 
-        # TODO: send email via email provider
-        # For now, log the token (will be replaced with actual email sending)
+        await send_confirmation_email(email, raw_token)
 
         return "If this email is not registered, a confirmation link has been sent"
 
@@ -176,7 +176,7 @@ class AuthService:
             token_hash = _hash_token(raw_token)
             expires_at = datetime.now(UTC) + timedelta(hours=settings.password_reset_ttl_hours)
             await self.repo.create_verification_token(user.id, "password_reset", token_hash, expires_at)
-            # TODO: send email
+            await send_password_reset_email(user.email, raw_token)
 
         # Anti-enumeration
         return "If this email is registered, a password reset link has been sent"
@@ -204,7 +204,7 @@ class AuthService:
             token_hash = _hash_token(raw_token)
             expires_at = datetime.now(UTC) + timedelta(hours=settings.email_confirm_ttl_hours)
             await self.repo.create_verification_token(user.id, "email_confirm", token_hash, expires_at)
-            # TODO: send email
+            await send_confirmation_email(user.email, raw_token)
 
         # Anti-enumeration
         return "If this email is not registered, a confirmation link has been sent"

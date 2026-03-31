@@ -1,10 +1,14 @@
+import uuid
+
 from fastapi import APIRouter, status
 from starlette.responses import StreamingResponse
 
 from app.common.dependencies import DBSession
 from app.middleware.auth import AuthUser
 from app.modules.ai.schemas import (
+    ConfirmActionRequest,
     CreateSessionRequest,
+    MessageResponse,
     SendMessageRequest,
     SessionDetailResponse,
     SessionListResponse,
@@ -68,4 +72,25 @@ async def send_message(session_id: str, body: SendMessageRequest, user: AuthUser
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/messages/{message_id}/actions/confirm",
+    response_model=MessageResponse,
+)
+async def confirm_action(
+    session_id: uuid.UUID,
+    message_id: uuid.UUID,
+    body: ConfirmActionRequest,
+    user: AuthUser,
+    db: DBSession,
+):
+    service = AIService(db)
+    return await service.confirm_action(
+        user.id,
+        session_id,
+        message_id,
+        body.action_index,
+        body.approved,
     )

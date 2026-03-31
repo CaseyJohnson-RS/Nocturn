@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -74,6 +74,8 @@ class AIRepository:
         role: str,
         content: str,
         sources: str | None = None,
+        actions: dict | list | None = None,
+        attached_note_ids: list[uuid.UUID] | None = None,
         token_estimate: int = 0,
     ) -> ChatMessage:
         msg = ChatMessage(
@@ -81,6 +83,8 @@ class AIRepository:
             role=role,
             content=content,
             sources=sources,
+            actions=actions,
+            attached_note_ids=attached_note_ids,
             token_estimate=token_estimate,
         )
         self.db.add(msg)
@@ -100,3 +104,26 @@ class AIRepository:
         messages = list(result.scalars().all())
         messages.reverse()  # chronological order
         return messages
+
+    async def get_message(
+        self, message_id: uuid.UUID, session_id: uuid.UUID,
+    ) -> ChatMessage | None:
+        result = await self.db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.id == message_id, ChatMessage.session_id == session_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def update_message_actions(
+        self,
+        message: ChatMessage,
+        actions: dict | list | None,
+    ) -> ChatMessage:
+        await self.db.execute(
+            update(ChatMessage)
+            .where(ChatMessage.id == message.id)
+            .values(actions=actions)
+        )
+        await self.db.flush()
+        await self.db.refresh(message)
+        return message

@@ -19,8 +19,10 @@ class Settings(BaseSettings):
 
     # --- RouterAI ---
     routerai_api_key: str = Field(default="")
-    routerai_base_url: str = Field(default="https://api.routerai.ru/v1")
+    routerai_base_url: str = Field(default="https://routerai.ru/api/v1")
     routerai_llm_model: str = Field(default="")
+    routerai_llm_context_window: int = Field(default=8192)
+    routerai_fetch_model_context_window: bool = Field(default=False)
     routerai_executor_model: str = Field(default="")
     routerai_embedding_model: str = Field(default="")
 

@@ -49,42 +49,77 @@ async def run_embedding_queue():
 
 
 async def run_cleanup():
-    """Run cleanup tasks: purge old soft-deleted notes past retention."""
+    """Run all periodic cleanup tasks."""
     from datetime import UTC, datetime, timedelta
 
     from sqlalchemy import delete, select
 
+    from app.modules.auth.models import RefreshToken, User, VerificationToken
+    from app.modules.ai.models import ChatSession
     from app.modules.notes.models import Note
 
-    cutoff = datetime.now(UTC) - timedelta(days=settings.trash_retention_days)
+    now = datetime.now(UTC)
 
     async with session_factory() as session:
+        # 1. Purge expired trashed notes
+        trash_cutoff = now - timedelta(days=settings.trash_retention_days)
         result = await session.execute(
             select(Note).where(
                 Note.deleted_at.is_not(None),
-                Note.deleted_at < cutoff,
+                Note.deleted_at < trash_cutoff,
             )
         )
-        expired = result.scalars().all()
+        expired_notes = result.scalars().all()
 
-        if not expired:
-            return
+        if expired_notes:
+            logger.info("Purging %d expired trashed notes", len(expired_notes))
+            from app.modules.rag.repository import RAGRepository
 
-        logger.info("Purging %d expired trashed notes", len(expired))
+            repo = RAGRepository(session)
+            for note in expired_notes:
+                await repo.delete_chunks_for_note(note.id)
+                await repo.remove_task(note.id)
 
-        from app.modules.rag.repository import RAGRepository
+            await session.execute(
+                delete(Note).where(
+                    Note.deleted_at.is_not(None),
+                    Note.deleted_at < trash_cutoff,
+                )
+            )
 
-        repo = RAGRepository(session)
-        for note in expired:
-            await repo.delete_chunks_for_note(note.id)
-            await repo.remove_task(note.id)
+        # 2. Purge expired refresh tokens
+        result = await session.execute(
+            delete(RefreshToken).where(RefreshToken.expires_at < now)
+        )
+        if result.rowcount:
+            logger.info("Purged %d expired refresh tokens", result.rowcount)
 
-        await session.execute(
-            delete(Note).where(
-                Note.deleted_at.is_not(None),
-                Note.deleted_at < cutoff,
+        # 3. Purge expired verification tokens
+        result = await session.execute(
+            delete(VerificationToken).where(VerificationToken.expires_at < now)
+        )
+        if result.rowcount:
+            logger.info("Purged %d expired verification tokens", result.rowcount)
+
+        # 4. Purge stale unconfirmed accounts
+        unconfirmed_cutoff = now - timedelta(hours=settings.unconfirmed_account_ttl_hours)
+        result = await session.execute(
+            delete(User).where(
+                User.is_email_confirmed.is_(False),
+                User.created_at < unconfirmed_cutoff,
             )
         )
+        if result.rowcount:
+            logger.info("Purged %d stale unconfirmed accounts", result.rowcount)
+
+        # 5. Purge expired chat sessions
+        session_cutoff = now - timedelta(days=settings.chat_session_ttl_days)
+        result = await session.execute(
+            delete(ChatSession).where(ChatSession.updated_at < session_cutoff)
+        )
+        if result.rowcount:
+            logger.info("Purged %d expired chat sessions", result.rowcount)
+
         await session.commit()
 
 
