@@ -13,6 +13,7 @@ from app.modules.auth.models import User, RefreshToken, VerificationToken  # noq
 from app.modules.notes.models import Note, NoteTag  # noqa: F401
 from app.modules.tags.models import Tag  # noqa: F401
 from app.modules.rag.models import NoteChunk, EmbeddingTask  # noqa: F401
+from app.modules.ai.models import ChatSession, ChatMessage  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

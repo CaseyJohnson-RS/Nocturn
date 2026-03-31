@@ -11,6 +11,7 @@ from app.config import settings
 from app.common.database import async_session_factory, engine
 from app.common.redis import redis_client
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.modules.ai.router import router as ai_router
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.notes.router import router as notes_router
@@ -65,6 +66,7 @@ app.include_router(profile_router)
 app.include_router(notes_router)
 app.include_router(tags_router)
 app.include_router(rag_router)
+app.include_router(ai_router)
 app.include_router(admin_router)
 
 

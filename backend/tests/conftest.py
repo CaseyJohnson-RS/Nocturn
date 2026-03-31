@@ -38,6 +38,7 @@ async def setup_database():
     from app.modules.notes.models import Note, NoteTag  # noqa: F401
     from app.modules.tags.models import Tag  # noqa: F401
     from app.modules.rag.models import NoteChunk, EmbeddingTask  # noqa: F401
+    from app.modules.ai.models import ChatSession, ChatMessage  # noqa: F401
 
     async with test_engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
