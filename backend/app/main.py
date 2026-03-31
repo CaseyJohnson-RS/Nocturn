@@ -15,6 +15,7 @@ from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.notes.router import router as notes_router
 from app.modules.profile.router import router as profile_router
+from app.modules.rag.router import router as rag_router
 from app.modules.tags.router import router as tags_router
 from app.seed import seed_admin
 
@@ -61,6 +62,7 @@ app.include_router(auth_router)
 app.include_router(profile_router)
 app.include_router(notes_router)
 app.include_router(tags_router)
+app.include_router(rag_router)
 app.include_router(admin_router)
 
 

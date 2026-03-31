@@ -16,6 +16,7 @@ from app.modules.notes.schemas import (
     NoteResponse,
     TagBrief,
 )
+from app.modules.rag.service import RAGService
 from app.modules.tags.repository import TagsRepository
 
 
@@ -29,6 +30,7 @@ class NotesService:
     def __init__(self, db: AsyncSession):
         self.repo = NotesRepository(db)
         self.tags_repo = TagsRepository(db)
+        self.rag = RAGService(db)
 
     def _note_to_response(self, note) -> NoteResponse:
         return NoteResponse(
@@ -70,6 +72,7 @@ class NotesService:
             await self.repo.set_note_tags(note.id, tag_ids)
 
         note = await self.repo.get_active_note(note.id, user_id)
+        await self.rag.index_note(note)
         return self._note_to_response(note)
 
     async def get(self, user_id: uuid.UUID, note_id: uuid.UUID) -> NoteResponse:
@@ -116,6 +119,7 @@ class NotesService:
         content = _sanitize(content)
 
         note = await self.repo.update_note(note, title, content)
+        await self.rag.index_note(note)
         return self._note_to_response(note)
 
     async def soft_delete(self, user_id: uuid.UUID, note_id: uuid.UUID) -> None:
@@ -123,18 +127,21 @@ class NotesService:
         if not note:
             raise NotFoundError("Note not found")
         await self.repo.soft_delete_note(note, datetime.now(UTC))
+        await self.rag.remove_note(note.id)
 
     async def restore(self, user_id: uuid.UUID, note_id: uuid.UUID) -> NoteResponse:
         note = await self.repo.get_deleted_note(note_id, user_id)
         if not note:
             raise NotFoundError("Note not found")
         note = await self.repo.restore_note(note)
+        await self.rag.index_note(note)
         return self._note_to_response(note)
 
     async def hard_delete(self, user_id: uuid.UUID, note_id: uuid.UUID) -> None:
         note = await self.repo.get_deleted_note(note_id, user_id)
         if not note:
             raise NotFoundError("Note not found")
+        await self.rag.remove_note(note.id)
         await self.repo.hard_delete_note(note)
 
     async def update_tags(

@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     # --- Chunking ---
     chunk_size_tokens: int = Field(default=500)
     chunk_overlap_tokens: int = Field(default=50)
+    embedding_dimensions: int = Field(default=2560)
 
 
 settings = Settings()  # type: ignore[call-arg]

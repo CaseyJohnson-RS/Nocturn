@@ -13,7 +13,7 @@ os.environ.update({
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.common.database import Base, get_db
 from app.common.redis import redis_client
+from app.config import settings
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 
@@ -36,8 +37,10 @@ async def setup_database():
     from app.modules.auth.models import User, RefreshToken, VerificationToken  # noqa: F401
     from app.modules.notes.models import Note, NoteTag  # noqa: F401
     from app.modules.tags.models import Tag  # noqa: F401
+    from app.modules.rag.models import NoteChunk, EmbeddingTask  # noqa: F401
 
     async with test_engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield
