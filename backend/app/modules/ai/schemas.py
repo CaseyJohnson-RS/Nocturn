@@ -11,17 +11,21 @@ class SendMessageRequest(BaseModel):
     note_ids: list[uuid.UUID] = Field(default_factory=list, max_length=5)
 
 
-class ConfirmActionRequest(BaseModel):
-    action_index: int = Field(ge=0)
-    approved: bool = Field(default=True)
-
-
 class CreateSessionRequest(BaseModel):
     title: str | None = Field(default=None, max_length=200)
+    dismiss_session_id: uuid.UUID | None = Field(
+        default=None,
+        description="If set, dismiss all pending proposals in this session before creating a new one",
+    )
 
 
 class UpdateSessionRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
+
+
+class UpdateActionRequest(BaseModel):
+    """PATCH /actions/{action_id} — apply or dismiss a proposal."""
+    status: str = Field(pattern=r"^(applied|dismissed)$")
 
 
 # --- Responses ---
@@ -33,7 +37,6 @@ class MessageResponse(BaseModel):
     session_id: uuid.UUID
     role: str
     content: str
-    sources: str | None = None
     actions: list[dict] | dict | None = None
     attached_note_ids: list[uuid.UUID] | None = None
     token_estimate: int

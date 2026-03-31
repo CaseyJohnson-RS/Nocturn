@@ -60,7 +60,7 @@ class NotesRepository:
         search: str | None = None,
         tag_ids: list[uuid.UUID] | None = None,
     ) -> tuple[list[Note], int]:
-        query = select(Note).where(Note.user_id == user_id)
+        query = select(Note).options(selectinload(Note.tags)).where(Note.user_id == user_id)
         count_query = select(func.count(Note.id)).where(Note.user_id == user_id)
 
         if deleted:

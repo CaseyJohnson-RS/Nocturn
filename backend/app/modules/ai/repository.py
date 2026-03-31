@@ -127,3 +127,33 @@ class AIRepository:
         await self.db.flush()
         await self.db.refresh(message)
         return message
+
+    async def find_action_by_id(
+        self,
+        session_id: uuid.UUID,
+        action_id: str,
+    ) -> tuple[ChatMessage | None, dict | None]:
+        """Find an action (proposal or pending_confirmation) by its UUID
+        across all messages in a session. Returns (message, action_dict)."""
+        result = await self.db.execute(
+            select(ChatMessage)
+            .where(
+                ChatMessage.session_id == session_id,
+                ChatMessage.role == "assistant",
+                ChatMessage.actions.is_not(None),
+            )
+            .order_by(ChatMessage.created_at.desc())
+        )
+        messages = result.scalars().all()
+
+        for msg in messages:
+            actions = msg.actions
+            if isinstance(actions, dict):
+                actions = [actions]
+            if not isinstance(actions, list):
+                continue
+            for a in actions:
+                if isinstance(a, dict) and a.get("id") == action_id:
+                    return msg, a
+
+        return None, None

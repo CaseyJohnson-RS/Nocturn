@@ -1,3 +1,13 @@
+"""AI assistant service — Planner tool-calling loop, proposal lifecycle,
+bulk operation execution.
+
+Implements AIS spec: multi-turn Planner with function calling, proposals,
+pending_confirmations, Executor one-shot for batch_transform, and Redis
+generating flag for concurrency control.
+"""
+
+from __future__ import annotations
+
 import json
 import logging
 import uuid
@@ -7,75 +17,160 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exceptions import ConflictError, NotFoundError, ValidationError
-from app.common.routerai import chat_completion_stream, get_model_context_length
+from app.common.redis import redis_client
+from app.common.routerai import (
+    ChatCompletionAccumulator,
+    chat_completion_stream,
+    get_model_context_length,
+)
 from app.config import settings
 from app.modules.ai.models import ChatMessage
 from app.modules.ai.repository import AIRepository
 from app.modules.ai.schemas import (
+    MessageResponse,
     SessionDetailResponse,
     SessionListResponse,
     SessionResponse,
-    MessageResponse,
+)
+from app.modules.ai.tools import (
+    BATCH_TOOL_NAMES,
+    EXECUTOR_TOOLS,
+    PLANNER_TOOLS,
+    PROPOSE_TOOL_NAMES,
+    READ_TOOL_NAMES,
+    ToolExecutor,
+    _build_summary,
+    generate_deterministic_proposals,
+    make_proposal,
 )
 from app.modules.notes.repository import NotesRepository
 from app.modules.rag.service import RAGService
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "You are Nocturn AI, a helpful assistant embedded in a note-taking app. "
-    "Answer the user's question using the provided note excerpts as context. "
-    "If the notes don't contain relevant information, say so honestly. "
-    "Be concise and reference specific notes when possible. "
-    "When you mention a note, use inline links in the format [[note:<note_id>|<title>]]. "
-    "If you want to propose changes or pending actions, append a JSON object wrapped in <ACTIONS> tags after the answer. "
-    "The object should look like {\"actions\": [ ... ]}."
-)
+# ---------------------------------------------------------------------------
+# System prompts (AIS 8.1 & 8.2)
+# ---------------------------------------------------------------------------
 
+PLANNER_SYSTEM_PROMPT = """\
+You are Nocturn AI, an assistant embedded in a note-taking app.
+You help the user find, analyse and modify their notes.
+
+## Rules
+
+1. Read notes via tools search_notes, get_note, list_tags.
+2. For changes use propose_* (single) or batch_* (bulk).
+   You cannot modify notes directly — only propose changes.
+3. The user decides whether to apply proposals.
+4. No more than one proposal of each type per note per response.
+5. No more than one batch_* operation per response. If the request requires
+   several — execute the first, suggest the user repeat for the next.
+6. Maximum notes in one batch_* operation — 25.
+   If more are needed — process the first 25, suggest repeating.
+7. Reply in the user's language.
+8. If no notes are found — say so. Do not invent content.
+9. Reference notes in text as [[note:uuid|Title]].
+   Maximum 5 references per response (not counting user-attached notes).
+10. Use get_note only when full content is needed (editing, detailed analysis).
+    For general answers content_preview from search_notes is enough.
+11. For batch_replace regex uses RE2 — do not use lookahead, lookbehind,
+    or backreferences.
+
+## Context
+
+Current date: {current_date}
+Attached notes are shown in the user's last message.
+If you need full content of an attached note, use get_note.\
+"""
+
+EXECUTOR_SYSTEM_PROMPT = """\
+Process the note according to the instruction. Use tools to make changes.
+If the instruction does not apply to this note — do not call any tools.
+
+## Instruction
+{instruction}
+
+## Note
+Title: {title}
+Tags: {tags}
+Content:
+{content}\
+"""
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _estimate_tokens(text: str) -> int:
     return int(len(text) / settings.planner_chars_per_token)
-
-
-def _build_context_block(notes_content: list[dict]) -> str:
-    """Format retrieved note chunks into a context block for the system prompt."""
-    if not notes_content:
-        return ""
-    parts = []
-    for i, note in enumerate(notes_content, 1):
-        parts.append(f"[Source {i}: {note['title'] or 'Untitled'}]\n{note['content']}")
-    return "\n\n---\n\n".join(parts)
-
-
-def _extract_actions(response_text: str) -> tuple[str, list[dict] | dict | None]:
-    """Extract actions JSON from assistant response if present."""
-    start_tag = "<ACTIONS>"
-    end_tag = "</ACTIONS>"
-    start = response_text.find(start_tag)
-    end = response_text.rfind(end_tag)
-
-    if start == -1 or end == -1 or end <= start:
-        return response_text, None
-
-    json_text = response_text[start + len(start_tag) : end].strip()
-    try:
-        actions_payload = json.loads(json_text)
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse assistant actions JSON")
-        return response_text, None
-
-    cleaned = response_text[:start].strip()
-    actions = actions_payload.get("actions") if isinstance(actions_payload, dict) else actions_payload
-    return cleaned, actions
 
 
 def _format_sse_event(payload: dict, event: str | None = None) -> str:
     parts = []
     if event:
         parts.append(f"event: {event}")
-    parts.append(f"data: {json.dumps(payload)}")
+    parts.append(f"data: {json.dumps(payload, default=str)}")
     return "\n".join(parts) + "\n\n"
 
+
+def _generating_key(session_id: uuid.UUID) -> str:
+    return f"generating:{session_id}"
+
+
+async def _set_generating(session_id: uuid.UUID) -> bool:
+    """Set the generating flag. Returns True if set (no other op running)."""
+    key = _generating_key(session_id)
+    # SET NX with a 120s TTL as crash-safety net
+    result = await redis_client.set(key, "1", nx=True, ex=120)
+    return result is not None
+
+
+async def _clear_generating(session_id: uuid.UUID) -> None:
+    await redis_client.delete(_generating_key(session_id))
+
+
+async def _token_budget() -> int:
+    model_window = settings.routerai_llm_context_window
+    if settings.routerai_fetch_model_context_window and settings.routerai_llm_model:
+        fetched = await get_model_context_length(settings.routerai_llm_model)
+        if fetched is not None:
+            model_window = fetched
+    return max(
+        model_window - settings.system_prompt_tokens - settings.safety_margin_tokens,
+        0,
+    )
+
+
+def _actions_summary_for_context(actions: list | dict | None) -> str:
+    """Build a short text summary of actions for LLM context (AIS 7.4)."""
+    if not actions:
+        return ""
+    if isinstance(actions, dict):
+        actions = [actions]
+    parts = []
+    for a in actions:
+        atype = a.get("type", "")
+        if atype == "proposal":
+            ptype = a.get("proposal_type", "")
+            status = a.get("status", "pending")
+            note_id = a.get("note_id", "")
+            summary = a.get("summary") or ""
+            if summary:
+                parts.append(f"[{ptype} — {status}: {summary}]")
+            else:
+                parts.append(f"[{ptype} for note {note_id} — {status}]")
+        elif atype == "pending_confirmation":
+            op = a.get("operation_type", "")
+            status = a.get("status", "pending")
+            n = len(a.get("note_ids", []))
+            parts.append(f"[{op} for {n} notes — {status}]")
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# AIService
+# ---------------------------------------------------------------------------
 
 class AIService:
     def __init__(self, db: AsyncSession):
@@ -84,11 +179,20 @@ class AIService:
         self.rag = RAGService(db)
         self.db = db
 
-    # --- Session management ---
+    # -----------------------------------------------------------------------
+    # Session management (unchanged from before)
+    # -----------------------------------------------------------------------
 
     async def create_session(
-        self, user_id: uuid.UUID, title: str | None = None,
+        self,
+        user_id: uuid.UUID,
+        title: str | None = None,
+        dismiss_session_id: uuid.UUID | None = None,
     ) -> SessionResponse:
+        # Dismiss pending proposals in old session if requested (AIS 10.2)
+        if dismiss_session_id:
+            await self._dismiss_all_pending(user_id, dismiss_session_id)
+
         count = await self.repo.count_user_sessions(user_id)
         if count >= settings.max_chat_sessions_per_user:
             raise ConflictError("Chat session limit reached")
@@ -130,7 +234,26 @@ class AIService:
             raise NotFoundError("Chat session not found")
         await self.repo.delete_session(session)
 
-    # --- Chat ---
+    # -----------------------------------------------------------------------
+    # Send message — multi-turn Planner tool-calling loop
+    # -----------------------------------------------------------------------
+
+    async def pre_validate_send(
+        self,
+        user_id: uuid.UUID,
+        session_id: uuid.UUID,
+        content: str,
+    ) -> tuple[int, str] | None:
+        """Validate preconditions before starting the SSE stream.
+        Returns (status_code, detail) tuple on error, or None on success."""
+        session = await self.repo.get_session(session_id, user_id)
+        if not session:
+            return (404, "Chat session not found")
+        if len(content) > settings.max_message_length:
+            return (400, "Message too long")
+        if not await _set_generating(session_id):
+            return (409, "Assistant is already generating a response")
+        return None
 
     async def send_message(
         self,
@@ -139,18 +262,28 @@ class AIService:
         content: str,
         note_ids: list[uuid.UUID] | None = None,
     ) -> AsyncGenerator[str]:
-        """Process user message: save it, gather context, stream LLM reply.
-
-        Yields SSE-formatted chunks. The final chunk contains the saved
-        assistant message metadata as JSON.
-        """
+        """Stream LLM response. Call pre_validate_send() before starting."""
         session = await self.repo.get_session(session_id, user_id)
         if not session:
-            raise NotFoundError("Chat session not found")
+            return
 
-        if len(content) > settings.max_message_length:
-            raise ValidationError("Message too long")
+        try:
+            async for event in self._run_planner(
+                user_id, session_id, session, content, note_ids,
+            ):
+                yield event
+        finally:
+            await _clear_generating(session_id)
 
+    async def _run_planner(
+        self,
+        user_id: uuid.UUID,
+        session_id: uuid.UUID,
+        session,
+        content: str,
+        note_ids: list[uuid.UUID] | None,
+    ) -> AsyncGenerator[str]:
+        """Inner generator for the Planner multi-turn tool loop."""
         # 1. Save user message
         user_msg = await self.repo.add_message(
             session_id=session_id,
@@ -160,167 +293,442 @@ class AIService:
             token_estimate=_estimate_tokens(content),
         )
 
-        # 2. Gather context from RAG + explicitly attached notes
-        context_notes = await self._gather_context(user_id, content, note_ids or [])
-        source_ids = [str(n["note_id"]) for n in context_notes]
+        # 2. Build LLM messages with history
+        llm_messages = await self._build_llm_messages(
+            session_id, user_id, note_ids or [],
+        )
 
-        # 3. Build messages for LLM
-        llm_messages = await self._build_llm_messages(session_id, context_notes)
+        # 3. Multi-turn tool-calling loop
+        actions: list[dict] = []
+        tool_executor = ToolExecutor(self.db, user_id, actions)
+        full_content_parts: list[str] = []
+        max_tool_rounds = 10  # safety limit
 
-        # 4. Stream LLM response
-        full_response = []
         try:
-            async for delta in chat_completion_stream(llm_messages):
-                full_response.append(delta)
-                yield _format_sse_event({"delta": delta})
+            for _round in range(max_tool_rounds):
+                accumulator = ChatCompletionAccumulator()
+
+                async for delta in chat_completion_stream(
+                    llm_messages,
+                    tools=PLANNER_TOOLS,
+                    accumulator=accumulator,
+                ):
+                    full_content_parts.append(delta)
+                    yield _format_sse_event({"delta": delta}, event="ai:text_delta")
+
+                # If no tool calls, we're done
+                if not accumulator.has_tool_calls:
+                    break
+
+                # Build the assistant message with tool_calls for context
+                assistant_turn: dict = {"role": "assistant"}
+                if accumulator.full_content:
+                    assistant_turn["content"] = accumulator.full_content
+                assistant_turn["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.name, "arguments": tc.arguments},
+                    }
+                    for tc in accumulator.tool_calls
+                ]
+                llm_messages.append(assistant_turn)
+
+                # Execute each tool call
+                for tc in accumulator.tool_calls:
+                    result_str = await tool_executor.execute(tc.name, tc.arguments)
+                    llm_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result_str,
+                    })
+
+                    # Emit proposal/confirmation SSE events as they're registered
+                    for action in actions:
+                        if action.get("_emitted"):
+                            continue
+                        action["_emitted"] = True
+                        if action["type"] == "proposal":
+                            yield _format_sse_event(
+                                {k: v for k, v in action.items() if k != "_emitted"},
+                                event="ai:proposal",
+                            )
+                        elif action["type"] == "pending_confirmation":
+                            yield _format_sse_event(
+                                {k: v for k, v in action.items() if k != "_emitted"},
+                                event="ai:pending_confirmation",
+                            )
+
+                # If only batch tools were called (no more text expected), break
+                tool_names = {tc.name for tc in accumulator.tool_calls}
+                if tool_names <= BATCH_TOOL_NAMES:
+                    break
+
         except Exception as exc:
-            logger.exception("LLM stream failed for session %s", session_id)
-            error_payload = {
-                "error": "AI assistant failed to generate a response. Please try again."
-            }
-            yield _format_sse_event(error_payload)
+            logger.exception("Planner failed for session %s", session_id)
+            yield _format_sse_event(
+                {"code": "llm_unavailable", "message": str(exc)},
+                event="ai:error",
+            )
+            # Save partial response if we have any
+            response_text = "".join(full_content_parts)
+            if response_text:
+                await self.repo.add_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=response_text,
+                    token_estimate=_estimate_tokens(response_text),
+                )
+            yield _format_sse_event({}, event="ai:done")
             return
 
-        response_text = "".join(full_response)
-        response_text, actions = _extract_actions(response_text)
+        # 4. Save assistant message
+        response_text = "".join(full_content_parts)
+        # Clean _emitted flags from actions before saving
+        clean_actions = [
+            {k: v for k, v in a.items() if k != "_emitted"}
+            for a in actions
+        ] if actions else None
 
-        # 5. Save assistant message
         assistant_msg = await self.repo.add_message(
             session_id=session_id,
             role="assistant",
-            content=response_text,
-            sources=json.dumps(source_ids) if source_ids else None,
-            actions=actions,
+            content=response_text or "(No text response)",
+            actions=clean_actions,
             token_estimate=_estimate_tokens(response_text),
         )
 
-        if actions:
-            yield _format_sse_event({"actions": actions}, event="proposal")
-
-        # 6. Auto-title the session if it's the first exchange
-        if session.title is None:
+        # 5. Auto-title
+        if session.title is None and content:
             title = content[:100].strip()
             await self.repo.update_session_title(session, title)
 
-        # 7. Yield final metadata event
+        # 6. Done
         msg_data = MessageResponse.model_validate(assistant_msg).model_dump(mode="json")
-        yield _format_sse_event({"done": True, "message": msg_data})
+        yield _format_sse_event({"message": msg_data}, event="ai:done")
 
-    async def confirm_action(
+    # -----------------------------------------------------------------------
+    # Cancel active generation (AIS 9.3)
+    # -----------------------------------------------------------------------
+
+    async def cancel_generation(
+        self, user_id: uuid.UUID, session_id: uuid.UUID,
+    ) -> dict:
+        session = await self.repo.get_session(session_id, user_id)
+        if not session:
+            raise NotFoundError("Chat session not found")
+
+        key = _generating_key(session_id)
+        deleted = await redis_client.delete(key)
+        if not deleted:
+            raise ConflictError("No active operation to cancel")
+        return {"status": "cancelled"}
+
+    # -----------------------------------------------------------------------
+    # Proposal lifecycle (AIS 5.2 / 5.3)
+    # -----------------------------------------------------------------------
+
+    async def update_action_status(
         self,
         user_id: uuid.UUID,
         session_id: uuid.UUID,
         message_id: uuid.UUID,
-        action_index: int,
-        approved: bool = True,
+        action_id: str,
+        new_status: str,
+    ) -> MessageResponse:
+        """Apply or dismiss a single proposal (PATCH endpoint)."""
+        if new_status not in ("applied", "dismissed"):
+            raise ValidationError("Status must be 'applied' or 'dismissed'")
+
+        session = await self.repo.get_session(session_id, user_id)
+        if not session:
+            raise NotFoundError("Chat session not found")
+
+        msg = await self.repo.get_message(message_id, session_id)
+        if not msg or msg.role != "assistant":
+            raise NotFoundError("Assistant message not found")
+
+        actions = msg.actions
+        if not actions:
+            raise ValidationError("No actions on this message")
+        if isinstance(actions, dict):
+            actions = [actions]
+
+        target = None
+        for a in actions:
+            if a.get("id") == action_id and a.get("type") == "proposal":
+                target = a
+                break
+
+        if target is None:
+            raise NotFoundError("Proposal not found")
+
+        if target.get("status") != "pending":
+            raise ConflictError("Proposal already finalized")
+
+        # Build summary, clear data, update status
+        target["summary"] = _build_summary(target, new_status)
+        target["status"] = new_status
+        target["data"] = None
+
+        msg = await self.repo.update_message_actions(msg, actions)
+        return MessageResponse.model_validate(msg)
+
+    # -----------------------------------------------------------------------
+    # Bulk confirmation (AIS 6.2)
+    # -----------------------------------------------------------------------
+
+    async def confirm_bulk(
+        self,
+        user_id: uuid.UUID,
+        session_id: uuid.UUID,
+        confirmation_id: str,
+    ) -> AsyncGenerator[str]:
+        """Confirm a pending_confirmation and generate proposals."""
+        session = await self.repo.get_session(session_id, user_id)
+        if not session:
+            raise NotFoundError("Chat session not found")
+
+        if not await _set_generating(session_id):
+            raise ConflictError("Another operation is in progress")
+
+        try:
+            async for event in self._execute_bulk(
+                user_id, session_id, confirmation_id,
+            ):
+                yield event
+        finally:
+            await _clear_generating(session_id)
+
+    async def _execute_bulk(
+        self,
+        user_id: uuid.UUID,
+        session_id: uuid.UUID,
+        confirmation_id: str,
+    ) -> AsyncGenerator[str]:
+        """Execute a confirmed bulk operation, yielding SSE events."""
+        # Find the message containing this confirmation
+        msg, confirmation = await self.repo.find_action_by_id(
+            session_id, confirmation_id,
+        )
+        if not msg or not confirmation:
+            raise NotFoundError("Confirmation not found")
+        if confirmation.get("status") != "pending":
+            raise ConflictError("Confirmation already processed")
+
+        # Mark as confirmed
+        confirmation["status"] = "confirmed"
+        await self.repo.update_message_actions(msg, msg.actions)
+
+        op_type = confirmation.get("operation_type", "")
+        note_ids = confirmation.get("note_ids", [])
+        params = confirmation.get("params", {})
+
+        # Create a new assistant message for the generated proposals
+        proposals: list[dict] = []
+
+        try:
+            if op_type == "transform":
+                # Non-deterministic: call Executor for each note
+                async for proposal in self._run_executor_batch(
+                    user_id, note_ids, params.get("instruction", ""),
+                ):
+                    proposals.append(proposal)
+                    yield _format_sse_event(proposal, event="ai:proposal")
+            else:
+                # Deterministic batch
+                proposals = await generate_deterministic_proposals(
+                    self.db, user_id, confirmation,
+                )
+                for p in proposals:
+                    yield _format_sse_event(p, event="ai:proposal")
+
+        except Exception as exc:
+            logger.exception("Bulk operation failed for session %s", session_id)
+            if not proposals:
+                yield _format_sse_event(
+                    {"code": "bulk_failed", "message": str(exc)},
+                    event="ai:error",
+                )
+
+        # Save proposals as a new assistant message
+        if proposals:
+            proposal_msg = await self.repo.add_message(
+                session_id=session_id,
+                role="assistant",
+                content=f"Generated {len(proposals)} proposals from bulk {op_type}.",
+                actions=proposals,
+                token_estimate=_estimate_tokens(str(proposals)),
+            )
+
+        # Update confirmation summary
+        n = len(note_ids)
+        confirmation["summary"] = (
+            f"{op_type} for {n} notes — confirmed, {len(proposals)} proposals generated"
+        )
+        await self.repo.update_message_actions(msg, msg.actions)
+
+        yield _format_sse_event({}, event="ai:done")
+
+    async def _run_executor_batch(
+        self,
+        user_id: uuid.UUID,
+        note_ids: list[str],
+        instruction: str,
+    ) -> AsyncGenerator[dict]:
+        """Call Executor (one-shot LLM) for each note in a batch_transform."""
+        for raw_id in note_ids:
+            try:
+                nid = uuid.UUID(raw_id)
+            except ValueError:
+                continue
+
+            note = await self.notes_repo.get_active_note(nid, user_id)
+            if not note:
+                continue
+
+            try:
+                proposals = await self._execute_single_note(note, instruction)
+                for p in proposals:
+                    yield p
+            except Exception as exc:
+                logger.warning(
+                    "Executor failed for note %s: %s", nid, exc,
+                )
+                continue
+
+    async def _execute_single_note(
+        self, note, instruction: str,
+    ) -> list[dict]:
+        """One-shot Executor call for a single note. Returns proposals."""
+        system_prompt = EXECUTOR_SYSTEM_PROMPT.format(
+            instruction=instruction,
+            title=note.title or "Untitled",
+            tags=", ".join(t.name for t in note.tags) if note.tags else "none",
+            content=note.content or "",
+        )
+
+        messages = [{"role": "system", "content": system_prompt}]
+
+        accumulator = ChatCompletionAccumulator()
+        async for _ in chat_completion_stream(
+            messages,
+            model=settings.routerai_executor_model or None,
+            tools=EXECUTOR_TOOLS,
+            accumulator=accumulator,
+        ):
+            pass  # We don't stream executor text
+
+        proposals = []
+        for tc in accumulator.tool_calls:
+            try:
+                args = json.loads(tc.arguments) if tc.arguments else {}
+            except json.JSONDecodeError:
+                continue
+
+            if tc.name == "edit_note":
+                title = args.get("title")
+                content = args.get("content")
+                if title or content:
+                    proposals.append(make_proposal(
+                        "edit_note", str(note.id),
+                        {"title": title, "content": content},
+                    ))
+            elif tc.name == "add_tags":
+                tags = args.get("tags", [])
+                if tags:
+                    proposals.append(make_proposal(
+                        "add_tags", str(note.id), {"tags": tags},
+                    ))
+            elif tc.name == "remove_tags":
+                tags = args.get("tags", [])
+                if tags:
+                    proposals.append(make_proposal(
+                        "remove_tags", str(note.id), {"tags": tags},
+                    ))
+            elif tc.name == "delete_note":
+                proposals.append(make_proposal(
+                    "delete_note", str(note.id),
+                    {"note_title": note.title or "Untitled"},
+                ))
+
+        return proposals
+
+    # -----------------------------------------------------------------------
+    # Dismiss bulk (AIS 6.3)
+    # -----------------------------------------------------------------------
+
+    async def dismiss_bulk(
+        self,
+        user_id: uuid.UUID,
+        session_id: uuid.UUID,
+        confirmation_id: str,
     ) -> MessageResponse:
         session = await self.repo.get_session(session_id, user_id)
         if not session:
             raise NotFoundError("Chat session not found")
 
-        assistant_msg = await self.repo.get_message(message_id, session_id)
-        if not assistant_msg or assistant_msg.role != "assistant":
-            raise NotFoundError("Assistant proposal not found")
-
-        actions = assistant_msg.actions
-        if actions is None:
-            raise ValidationError("No proposed actions available for confirmation")
-        if isinstance(actions, dict):
-            actions = [actions]
-        if not isinstance(actions, list):
-            raise ValidationError("Invalid actions payload")
-        if action_index < 0 or action_index >= len(actions):
-            raise ValidationError("Action index out of range")
-
-        selected_action = actions[action_index]
-        if selected_action.get("status") in ("approved", "rejected"):
-            raise ConflictError("This action has already been finalized")
-
-        selected_action["status"] = "approved" if approved else "rejected"
-        selected_action["confirmed_at"] = datetime.now(timezone.utc).isoformat()
-        selected_action["confirmed_by"] = str(user_id)
-
-        updated_actions = [dict(action) if isinstance(action, dict) else action for action in actions]
-        assistant_msg = await self.repo.update_message_actions(assistant_msg, updated_actions)
-
-        confirmation_text = (
-            f"{'Approved' if approved else 'Rejected'} proposed action: "
-            f"{selected_action.get('type', 'unknown')}"
+        msg, confirmation = await self.repo.find_action_by_id(
+            session_id, confirmation_id,
         )
-        if selected_action.get("detail"):
-            confirmation_text += f" - {selected_action['detail']}"
+        if not msg or not confirmation:
+            raise NotFoundError("Confirmation not found")
+        if confirmation.get("status") != "pending":
+            raise ConflictError("Confirmation already processed")
 
-        await self.repo.add_message(
-            session_id=session_id,
-            role="user",
-            content=confirmation_text,
-            attached_note_ids=None,
-            token_estimate=_estimate_tokens(confirmation_text),
-        )
+        confirmation["status"] = "dismissed"
+        confirmation["summary"] = _build_summary(confirmation, "dismissed")
+        msg = await self.repo.update_message_actions(msg, msg.actions)
+        return MessageResponse.model_validate(msg)
 
-        return MessageResponse.model_validate(assistant_msg)
+    # -----------------------------------------------------------------------
+    # Dismiss all pending in a session (AIS 10.2)
+    # -----------------------------------------------------------------------
 
-    async def _gather_context(
-        self,
-        user_id: uuid.UUID,
-        query: str,
-        explicit_note_ids: list[uuid.UUID],
-    ) -> list[dict]:
-        """Combine RAG search results with explicitly attached notes."""
-        context: list[dict] = []
-        seen_note_ids: set[uuid.UUID] = set()
+    async def _dismiss_all_pending(
+        self, user_id: uuid.UUID, session_id: uuid.UUID,
+    ) -> None:
+        session = await self.repo.get_session(session_id, user_id)
+        if not session:
+            return
 
-        # Explicitly attached notes first
-        if explicit_note_ids:
-            notes = await self.notes_repo.get_notes_by_ids(explicit_note_ids, user_id)
-            for note in notes[: settings.max_attached_notes]:
-                if note.id not in seen_note_ids:
-                    context.append({
-                        "note_id": note.id,
-                        "title": note.title,
-                        "content": (note.content or "")[:2000],
-                    })
-                    seen_note_ids.add(note.id)
+        messages = await self.repo.get_recent_messages(session_id, limit=100)
+        for msg in messages:
+            if not msg.actions or msg.role != "assistant":
+                continue
+            actions = msg.actions if isinstance(msg.actions, list) else [msg.actions]
+            changed = False
+            for a in actions:
+                if a.get("status") == "pending":
+                    a["status"] = "dismissed"
+                    a["summary"] = _build_summary(a, "dismissed")
+                    if a.get("type") == "proposal":
+                        a["data"] = None
+                    changed = True
+            if changed:
+                await self.repo.update_message_actions(msg, actions)
 
-        # RAG search for additional context
-        remaining = settings.max_sources_per_response - len(context)
-        if remaining > 0:
-            search_results = await self.rag.search(user_id, query, limit=remaining)
-            for result in search_results.results:
-                if result.note_id not in seen_note_ids:
-                    # Fetch note title for context block
-                    note = await self.notes_repo.get_note_by_id(result.note_id, user_id)
-                    if note:
-                        context.append({
-                            "note_id": result.note_id,
-                            "title": note.title,
-                            "content": result.content,
-                        })
-                        seen_note_ids.add(result.note_id)
-
-        return context
+    # -----------------------------------------------------------------------
+    # Build LLM messages (AIS 7)
+    # -----------------------------------------------------------------------
 
     async def _build_llm_messages(
         self,
         session_id: uuid.UUID,
-        context_notes: list[dict],
+        user_id: uuid.UUID,
+        note_ids: list[uuid.UUID],
     ) -> list[dict]:
-        """Build the message list for the LLM, respecting token budget."""
-        # System prompt with context
-        context_block = _build_context_block(context_notes)
-        system_content = SYSTEM_PROMPT
-        if context_block:
-            system_content += f"\n\n## Relevant notes:\n\n{context_block}"
-
+        # System prompt
+        system_content = PLANNER_SYSTEM_PROMPT.format(
+            current_date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        )
         messages: list[dict] = [{"role": "system", "content": system_content}]
 
-        # Add recent conversation history
+        # History
         history = await self.repo.get_recent_messages(
             session_id, limit=settings.max_messages_in_context,
         )
 
-        # Trim history to fit token budget
-        # Budget = model context - system_prompt - safety_margin
         system_tokens = _estimate_tokens(system_content)
         budget = await _token_budget() - system_tokens
         selected: list[ChatMessage] = []
@@ -332,25 +740,36 @@ class AIService:
             used += msg.token_estimate
         selected.reverse()
 
-        for msg in selected:
-            messages.append({"role": msg.role, "content": msg.content})
+        for i, msg in enumerate(selected):
+            msg_content = msg.content
+            is_last_user = (
+                msg.role == "user" and i == len(selected) - 1
+            )
+
+            # Append attached notes preview to the last user message (AIS 7.4)
+            if is_last_user and note_ids:
+                previews = await self._build_attached_previews(user_id, note_ids)
+                if previews:
+                    msg_content += "\n\n[Attached notes:]\n" + previews
+
+            # Append actions summary to assistant messages (AIS 7.4)
+            if msg.role == "assistant" and msg.actions:
+                summary = _actions_summary_for_context(msg.actions)
+                if summary:
+                    msg_content += "\n\n" + summary
+
+            messages.append({"role": msg.role, "content": msg_content})
 
         return messages
 
-
-async def _token_budget() -> int:
-    """Rough token budget for conversation history.
-
-    Use the configured RouterAI context window if provided. If configured to
-    fetch the model context size from RouterAI, resolve it from the model list.
-    """
-    model_window = settings.routerai_llm_context_window
-    if settings.routerai_fetch_model_context_window and settings.routerai_llm_model:
-        fetched = await get_model_context_length(settings.routerai_llm_model)
-        if fetched is not None:
-            model_window = fetched
-
-    return max(
-        model_window - settings.system_prompt_tokens - settings.safety_margin_tokens,
-        0,
-    )
+    async def _build_attached_previews(
+        self, user_id: uuid.UUID, note_ids: list[uuid.UUID],
+    ) -> str:
+        notes = await self.notes_repo.get_notes_by_ids(note_ids, user_id)
+        lines = []
+        for n in notes[: settings.max_attached_notes]:
+            if n.deleted_at is not None:
+                continue
+            preview = (n.content or "")[:100]
+            lines.append(f"- {n.id} | {n.title or 'Untitled'}: {preview}")
+        return "\n".join(lines)

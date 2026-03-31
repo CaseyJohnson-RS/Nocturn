@@ -4,7 +4,13 @@ import httpx
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from app.common.routerai import create_embeddings, chat_completion_stream, get_model_context_length
+from app.common.routerai import (
+    ChatCompletionAccumulator,
+    ToolCall,
+    create_embeddings,
+    chat_completion_stream,
+    get_model_context_length,
+)
 
 _FAKE_REQUEST = httpx.Request("POST", "http://test/embeddings")
 
@@ -188,9 +194,91 @@ class TestChatCompletionStream:
         assert body["messages"] == messages
         assert body["stream"] is True
 
+    async def test_accumulator_collects_tool_calls(self):
+        """When tools and accumulator are passed, tool_calls are collected."""
+        lines = [
+            "data: " + '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"tc1","type":"function","function":{"name":"get_note","arguments":"{\\"n"}}]}}]}',
+            "data: " + '{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ote_id\\":\\"abc\\"}"}}]}}]}',
+            "data: [DONE]",
+        ]
+
+        mock_resp = AsyncMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.aiter_lines = self._async_line_iter(lines)
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_client = AsyncMock()
+        mock_client.stream = MagicMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        accumulator = ChatCompletionAccumulator()
+        tools = [{"type": "function", "function": {"name": "get_note"}}]
+
+        with patch("app.common.routerai.httpx.AsyncClient", return_value=mock_client):
+            chunks = []
+            async for c in chat_completion_stream(
+                [{"role": "user", "content": "hi"}],
+                tools=tools,
+                accumulator=accumulator,
+            ):
+                chunks.append(c)
+
+        assert chunks == []  # No content deltas, only tool calls
+        assert len(accumulator.tool_calls) == 1
+        tc = accumulator.tool_calls[0]
+        assert tc.id == "tc1"
+        assert tc.name == "get_note"
+        assert '"note_id":"abc"' in tc.arguments
+
     @staticmethod
     def _async_line_iter(lines):
         async def _iter():
             for line in lines:
                 yield line
         return _iter
+
+
+# --- ChatCompletionAccumulator ---
+
+class TestAccumulator:
+    def test_content_accumulation(self):
+        acc = ChatCompletionAccumulator()
+        assert acc.feed_delta({"content": "Hello"}) == "Hello"
+        assert acc.feed_delta({"content": " world"}) == " world"
+        acc.finalize()
+        assert acc.full_content == "Hello world"
+        assert not acc.has_tool_calls
+        assert acc.tool_calls == []
+
+    def test_tool_call_accumulation(self):
+        acc = ChatCompletionAccumulator()
+        acc.feed_delta({
+            "tool_calls": [
+                {"index": 0, "id": "tc_1", "function": {"name": "get_note", "arguments": '{"no'}},
+            ]
+        })
+        acc.feed_delta({
+            "tool_calls": [
+                {"index": 0, "function": {"arguments": 'te_id":"abc"}'}},
+            ]
+        })
+        assert acc.has_tool_calls
+        acc.finalize()
+        assert len(acc.tool_calls) == 1
+        assert acc.tool_calls[0].id == "tc_1"
+        assert acc.tool_calls[0].name == "get_note"
+        assert acc.tool_calls[0].arguments == '{"note_id":"abc"}'
+
+    def test_mixed_content_and_tools(self):
+        acc = ChatCompletionAccumulator()
+        acc.feed_delta({"content": "Let me search"})
+        acc.feed_delta({
+            "tool_calls": [
+                {"index": 0, "id": "tc_1", "function": {"name": "search_notes", "arguments": "{}"}},
+            ]
+        })
+        acc.finalize()
+        assert acc.full_content == "Let me search"
+        assert len(acc.tool_calls) == 1
