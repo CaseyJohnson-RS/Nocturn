@@ -1,9 +1,9 @@
 import logging
+import subprocess
+import sys
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
-from alembic import command
-from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,8 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 def _run_migrations() -> None:
-    alembic_cfg = Config("alembic.ini")
-    command.upgrade(alembic_cfg, "head")
+    subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        check=True,
+    )
 
 
 @asynccontextmanager
