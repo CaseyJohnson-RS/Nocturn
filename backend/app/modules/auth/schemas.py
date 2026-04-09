@@ -3,13 +3,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
 
-
 # --- Requests ---
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
-    nickname: str = Field(min_length=2, max_length=32, pattern=r"^[a-zA-Zа-яА-ЯёЁ0-9_-]+$")
+    nickname: str = Field(min_length=2, max_length=32)
 
 
 class LoginRequest(BaseModel):
@@ -39,6 +39,7 @@ class ResendConfirmationRequest(BaseModel):
 
 
 # --- Responses ---
+
 
 class MessageResponse(BaseModel):
     message: str

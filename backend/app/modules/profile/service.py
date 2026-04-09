@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schemas import UserResponse
-from app.modules.auth.service import _validate_password
+from app.modules.auth.service import validate_password
 
 ph = PasswordHasher()
 
@@ -44,7 +44,7 @@ class ProfileService:
         except VerifyMismatchError:
             raise UnauthorizedError("Incorrect current password")
 
-        _validate_password(new_password)
+        validate_password(new_password)
         new_hash = ph.hash(new_password)
         await self.repo.update_password(user_id, new_hash)
         # Revoke all sessions so user must re-login with new password

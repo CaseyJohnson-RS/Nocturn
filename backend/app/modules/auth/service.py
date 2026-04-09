@@ -2,15 +2,17 @@ import hashlib
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.common.email import send_confirmation_email, send_password_reset_email
 from app.common.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
+from app.config import settings
+from app.modules.auth.models import User
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schemas import TokenResponse
 
@@ -21,12 +23,15 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def _validate_password(password: str) -> None:
+def validate_password(password: str) -> None:
     has_upper = any(c.isupper() for c in password)
     has_lower = any(c.islower() for c in password)
     has_digit = any(c.isdigit() for c in password)
     if not (has_upper and has_lower and has_digit):
-        raise ValidationError("Password must contain at least one uppercase letter, one lowercase letter, and one digit")
+        raise ValidationError(
+            "Password must contain at least one uppercase letter,"
+            "one lowercase letter, and one digit"
+        )
 
 
 class AuthService:
@@ -38,18 +43,18 @@ class AuthService:
     @staticmethod
     def create_access_token(user_id: uuid.UUID, role: str) -> str:
         now = datetime.now(UTC)
-        payload = {
+        payload: dict[str, Any] = {
             "sub": str(user_id),
             "role": role,
             "iat": now,
             "exp": now + timedelta(minutes=settings.access_token_ttl_minutes),
         }
-        return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+        return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")  # type: ignore
 
     @staticmethod
-    def decode_access_token(token: str) -> dict:
+    def decode_access_token(token: str) -> dict[str, Any]:
         try:
-            return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+            return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])  # type: ignore
         except jwt.ExpiredSignatureError:
             raise UnauthorizedError("Token expired")
         except jwt.InvalidTokenError:
@@ -58,19 +63,17 @@ class AuthService:
     # --- Registration ---
 
     async def register(self, email: str, password: str, nickname: str) -> str:
-        _validate_password(password)
+        validate_password(password)
 
-        existing = await self.repo.get_user_by_email(email)
-        if existing:
-            # Anti-enumeration: return same response
-            return "If this email is not registered, a confirmation link has been sent"
-
-        existing_nick = await self.repo.get_user_by_nickname(nickname)
-        if existing_nick:
-            raise ConflictError("Nickname already taken")
+        user = await self.repo.get_user_by_email(email)
 
         password_hash = ph.hash(password)
-        user = await self.repo.create_user(email, nickname, password_hash)
+
+        if user:
+            await self.repo.update_nickname(user.id, nickname)
+            await self.repo.update_password(user.id, password_hash)
+        else:
+            user = await self.repo.create_user(email, nickname, password_hash)
 
         # Create email confirmation token
         raw_token = secrets.token_urlsafe(32)
@@ -175,14 +178,16 @@ class AuthService:
             raw_token = secrets.token_urlsafe(32)
             token_hash = _hash_token(raw_token)
             expires_at = datetime.now(UTC) + timedelta(hours=settings.password_reset_ttl_hours)
-            await self.repo.create_verification_token(user.id, "password_reset", token_hash, expires_at)
+            await self.repo.create_verification_token(
+                user.id, "password_reset", token_hash, expires_at
+            )
             await send_password_reset_email(user.email, raw_token)
 
         # Anti-enumeration
         return "If this email is registered, a password reset link has been sent"
 
     async def reset_password(self, raw_token: str, new_password: str) -> None:
-        _validate_password(new_password)
+        validate_password(new_password)
 
         token_hash = _hash_token(raw_token)
         vt = await self.repo.get_verification_token_by_hash(token_hash, "password_reset")
@@ -203,8 +208,17 @@ class AuthService:
             raw_token = secrets.token_urlsafe(32)
             token_hash = _hash_token(raw_token)
             expires_at = datetime.now(UTC) + timedelta(hours=settings.email_confirm_ttl_hours)
-            await self.repo.create_verification_token(user.id, "email_confirm", token_hash, expires_at)
+            await self.repo.create_verification_token(
+                user.id, "email_confirm", token_hash, expires_at
+            )
             await send_confirmation_email(user.email, raw_token)
 
         # Anti-enumeration
         return "If this email is not registered, a confirmation link has been sent"
+
+    # --- Me ---
+    async def get_user(self, user_id: uuid.UUID) -> User:
+        user = await self.repo.get_user_by_id(user_id)
+        if not user:
+            raise NotFoundError("User not found")
+        return user

@@ -19,6 +19,8 @@ from app.modules.notes.schemas import (
 from app.modules.rag.service import RAGService
 from app.modules.tags.repository import TagsRepository
 
+_UNSET = object()
+
 
 def _sanitize(text: str | None) -> str | None:
     if text is None:
@@ -104,9 +106,9 @@ class NotesService:
         self,
         user_id: uuid.UUID,
         note_id: uuid.UUID,
-        title: str | None,
-        content: str | None,
         version: int,
+        title: str | None = _UNSET,
+        content: str | None = _UNSET,
     ) -> NoteResponse:
         note = await self.repo.get_active_note(note_id, user_id)
         if not note:
@@ -115,8 +117,15 @@ class NotesService:
         if note.version != version:
             raise ConflictError("Version conflict — refresh and retry")
 
-        title = _sanitize(title)
-        content = _sanitize(content)
+        if title is not _UNSET:
+            title = _sanitize(title)
+        else:
+            title = note.title
+
+        if content is not _UNSET:
+            content = _sanitize(content)
+        else:
+            content = note.content
 
         note = await self.repo.update_note(note, title, content)
         await self.rag.index_note(note)

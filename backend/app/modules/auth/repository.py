@@ -18,18 +18,16 @@ class AuthRepository:
         return result.scalar_one_or_none()
 
     async def get_user_by_email(self, email: str) -> User | None:
-        result = await self.db.execute(
-            select(User).where(User.email == email.lower())
-        )
+        result = await self.db.execute(select(User).where(User.email == email.lower()))
         return result.scalar_one_or_none()
 
     async def get_user_by_nickname(self, nickname: str) -> User | None:
-        result = await self.db.execute(
-            select(User).where(User.nickname == nickname)
-        )
+        result = await self.db.execute(select(User).where(User.nickname == nickname))
         return result.scalar_one_or_none()
 
-    async def create_user(self, email: str, nickname: str, password_hash: str, role: str = "user") -> User:
+    async def create_user(
+        self, email: str, nickname: str, password_hash: str, role: str = "user"
+    ) -> User:
         user = User(
             email=email.lower(),
             nickname=nickname,
@@ -51,14 +49,10 @@ class AuthRepository:
         )
 
     async def update_nickname(self, user_id: uuid.UUID, nickname: str) -> None:
-        await self.db.execute(
-            update(User).where(User.id == user_id).values(nickname=nickname)
-        )
+        await self.db.execute(update(User).where(User.id == user_id).values(nickname=nickname))
 
     async def set_active(self, user_id: uuid.UUID, is_active: bool) -> None:
-        await self.db.execute(
-            update(User).where(User.id == user_id).values(is_active=is_active)
-        )
+        await self.db.execute(update(User).where(User.id == user_id).values(is_active=is_active))
 
     # --- Refresh tokens ---
 
@@ -81,14 +75,10 @@ class AuthRepository:
         return result.scalar_one_or_none()
 
     async def delete_refresh_token(self, token_id: uuid.UUID) -> None:
-        await self.db.execute(
-            delete(RefreshToken).where(RefreshToken.id == token_id)
-        )
+        await self.db.execute(delete(RefreshToken).where(RefreshToken.id == token_id))
 
     async def delete_all_user_refresh_tokens(self, user_id: uuid.UUID) -> None:
-        await self.db.execute(
-            delete(RefreshToken).where(RefreshToken.user_id == user_id)
-        )
+        await self.db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
 
     async def count_user_sessions(self, user_id: uuid.UUID) -> int:
         result = await self.db.execute(
@@ -126,9 +116,7 @@ class AuthRepository:
         return result.scalar_one_or_none()
 
     async def delete_verification_token(self, token_id: uuid.UUID) -> None:
-        await self.db.execute(
-            delete(VerificationToken).where(VerificationToken.id == token_id)
-        )
+        await self.db.execute(delete(VerificationToken).where(VerificationToken.id == token_id))
 
     async def delete_user_verification_tokens(self, user_id: uuid.UUID, type: str) -> None:
         await self.db.execute(

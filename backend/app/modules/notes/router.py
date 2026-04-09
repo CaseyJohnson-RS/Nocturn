@@ -28,7 +28,7 @@ async def create_note(body: CreateNoteRequest, user: AuthUser, db: DBSession):
 async def list_notes(
     user: AuthUser,
     db: DBSession,
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     deleted: bool = Query(default=False),
     search: str | None = Query(default=None, max_length=200),
@@ -51,7 +51,13 @@ async def get_note(note_id: uuid.UUID, user: AuthUser, db: DBSession):
 @router.put("/{note_id}", response_model=NoteResponse)
 async def update_note(note_id: uuid.UUID, body: UpdateNoteRequest, user: AuthUser, db: DBSession):
     service = NotesService(db)
-    return await service.update(user.id, note_id, body.title, body.content, body.version)
+    payload = body.model_dump(exclude_unset=True)
+    kwargs: dict[str, object] = {"version": payload["version"]}
+    if "title" in payload:
+        kwargs["title"] = payload["title"]
+    if "content" in payload:
+        kwargs["content"] = payload["content"]
+    return await service.update(user.id, note_id, **kwargs)
 
 
 @router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
