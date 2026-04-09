@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class UpdateNicknameRequest(BaseModel):
-    nickname: str = Field(min_length=2, max_length=32, pattern=r"^[a-zA-Zа-яА-ЯёЁ0-9_-]+$")
+    nickname: str = Field(min_length=2, max_length=32)
 
 
 class ChangePasswordRequest(BaseModel):

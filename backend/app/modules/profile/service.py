@@ -4,7 +4,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
+from app.common.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schemas import UserResponse
 from app.modules.auth.service import validate_password
