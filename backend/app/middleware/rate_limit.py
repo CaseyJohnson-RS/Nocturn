@@ -1,10 +1,9 @@
 import time
 
-from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.common.exceptions import RateLimitError, ServiceUnavailableError
+from app.common.exceptions import RateLimitError
 from app.common.redis import redis_client
 from app.config import settings
 
@@ -42,6 +41,7 @@ def _get_user_id(scope: Scope) -> str | None:
         return None
     try:
         from app.modules.auth.service import AuthService
+
         payload = AuthService.decode_access_token(auth_str.removeprefix("Bearer "))
         return payload.get("sub")
     except Exception:
@@ -76,9 +76,7 @@ class RateLimitMiddleware:
             if method in ("GET", "HEAD"):
                 await self.app(scope, receive, send)
                 return
-            response = JSONResponse(
-                {"detail": "Service temporarily unavailable"}, status_code=503
-            )
+            response = JSONResponse({"detail": "Service temporarily unavailable"}, status_code=503)
             await response(scope, receive, send)
             return
 
