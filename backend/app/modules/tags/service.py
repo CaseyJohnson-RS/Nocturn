@@ -3,15 +3,15 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.common.exceptions import ConflictError, NotFoundError, ValidationError
+from app.config import settings
 from app.modules.tags.repository import TagsRepository
 from app.modules.tags.schemas import TagListResponse, TagResponse
 
 TAG_NAME_PATTERN = re.compile(r"^[\w\sа-яА-ЯёЁ\-]+$", re.UNICODE)
 
 
-def _validate_tag_name(name: str) -> str:
+def validate_tag_name(name: str) -> str:
     name = name.strip()
     if not name:
         raise ValidationError("Tag name cannot be empty")
@@ -27,7 +27,7 @@ class TagsService:
         self.repo = TagsRepository(db)
 
     async def create(self, user_id: uuid.UUID, name: str) -> TagResponse:
-        name = _validate_tag_name(name)
+        name = validate_tag_name(name)
 
         count = await self.repo.count_user_tags(user_id)
         if count >= settings.max_tags_per_user:
@@ -62,7 +62,7 @@ class TagsService:
         )
 
     async def update(self, user_id: uuid.UUID, tag_id: uuid.UUID, name: str) -> TagResponse:
-        name = _validate_tag_name(name)
+        name = validate_tag_name(name)
 
         tag = await self.repo.get_tag_by_id(tag_id, user_id)
         if not tag:

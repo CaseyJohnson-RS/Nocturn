@@ -3,8 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-
 # --- Requests ---
+
 
 class CreateTagRequest(BaseModel):
     name: str = Field(min_length=1, max_length=50)
@@ -15,6 +15,7 @@ class UpdateTagRequest(BaseModel):
 
 
 # --- Responses ---
+
 
 class TagResponse(BaseModel):
     id: uuid.UUID
