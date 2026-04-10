@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Final
 
 import nh3
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.common.exceptions import ConflictError, NotFoundError, ValidationError
+from app.config import settings
+from app.modules.notes.models import Note
 from app.modules.notes.repository import NotesRepository
 from app.modules.notes.schemas import (
     BatchNotesResponse,
@@ -19,7 +21,17 @@ from app.modules.notes.schemas import (
 from app.modules.rag.service import RAGService
 from app.modules.tags.repository import TagsRepository
 
-_UNSET = object()
+
+class _Unset:
+    """Sentinel for unset fields."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "UNSET"
+
+
+UNSET: Final = _Unset()
 
 
 def _sanitize(text: str | None) -> str | None:
@@ -34,7 +46,7 @@ class NotesService:
         self.tags_repo = TagsRepository(db)
         self.rag = RAGService(db)
 
-    def _note_to_response(self, note) -> NoteResponse:
+    def _note_to_response(self, note: Note) -> NoteResponse:
         return NoteResponse(
             id=note.id,
             user_id=note.user_id,
@@ -74,6 +86,10 @@ class NotesService:
             await self.repo.set_note_tags(note.id, tag_ids)
 
         note = await self.repo.get_active_note(note.id, user_id)
+
+        if not note:
+            raise RuntimeError("Failed to retrieve newly created note")
+
         await self.rag.index_note(note)
         return self._note_to_response(note)
 
@@ -81,7 +97,8 @@ class NotesService:
         note = await self.repo.get_note_by_id(note_id, user_id)
         if not note:
             raise NotFoundError("Note not found")
-        return self._note_to_response(note)
+        else:
+            return self._note_to_response(note)
 
     async def list(
         self,
@@ -92,9 +109,7 @@ class NotesService:
         search: str | None = None,
         tag_ids: list[uuid.UUID] | None = None,
     ) -> NoteListResponse:
-        notes, total = await self.repo.list_notes(
-            user_id, limit, offset, deleted, search, tag_ids
-        )
+        notes, total = await self.repo.list_notes(user_id, limit, offset, deleted, search, tag_ids)
         return NoteListResponse(
             items=[NoteListItem.model_validate(n) for n in notes],
             total=total,
@@ -107,8 +122,8 @@ class NotesService:
         user_id: uuid.UUID,
         note_id: uuid.UUID,
         version: int,
-        title: str | None = _UNSET,
-        content: str | None = _UNSET,
+        title: str | None | _Unset = UNSET,
+        content: str | None | _Unset = UNSET,
     ) -> NoteResponse:
         note = await self.repo.get_active_note(note_id, user_id)
         if not note:
@@ -117,13 +132,13 @@ class NotesService:
         if note.version != version:
             raise ConflictError("Version conflict — refresh and retry")
 
-        if title is not _UNSET:
-            title = _sanitize(title)
+        if title is not UNSET:
+            title = _sanitize(title)  # type: ignore
         else:
             title = note.title
 
-        if content is not _UNSET:
-            content = _sanitize(content)
+        if content is not UNSET:
+            content = _sanitize(content)  # type: ignore
         else:
             content = note.content
 
@@ -174,6 +189,10 @@ class NotesService:
         await self.repo.set_note_tags(note.id, tag_ids)
 
         note = await self.repo.get_active_note(note_id, user_id)
+
+        if not note:
+            raise RuntimeError("Failed to retrieve newly created note")
+
         return self._note_to_response(note)
 
     async def batch_get(
@@ -182,6 +201,4 @@ class NotesService:
         note_ids: list[uuid.UUID],
     ) -> BatchNotesResponse:
         notes = await self.repo.get_notes_by_ids(note_ids, user_id)
-        return BatchNotesResponse(
-            items=[self._note_to_response(n) for n in notes]
-        )
+        return BatchNotesResponse(items=[self._note_to_response(n) for n in notes])

@@ -3,7 +3,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-
 # --- Shared ---
 
 class TagBrief(BaseModel):
@@ -18,7 +17,7 @@ class TagBrief(BaseModel):
 class CreateNoteRequest(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     content: str | None = Field(default=None, max_length=20000)
-    tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)
+    tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)  # type: ignore
 
 
 class UpdateNoteRequest(BaseModel):
@@ -28,7 +27,7 @@ class UpdateNoteRequest(BaseModel):
 
 
 class UpdateNoteTagsRequest(BaseModel):
-    tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)
+    tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)  # type: ignore
 
 
 class BatchGetNotesRequest(BaseModel):

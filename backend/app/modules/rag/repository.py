@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.rag.models import EmbeddingTask, NoteChunk
@@ -51,16 +51,13 @@ class RAGRepository:
 
     async def get_chunks_for_note(self, note_id: uuid.UUID) -> list[NoteChunk]:
         result = await self.db.execute(
-            select(NoteChunk)
-            .where(NoteChunk.note_id == note_id)
-            .order_by(NoteChunk.chunk_index)
+            select(NoteChunk).where(NoteChunk.note_id == note_id).order_by(NoteChunk.chunk_index)
         )
         return list(result.scalars().all())
 
     # --- Embedding queue ---
 
-    async def enqueue(self, note_id: uuid.UUID) -> None:
-        """Add or reset a note in the embedding queue."""
+    async def enqueue(self, note_id: uuid.UUID, user_id: uuid.UUID) -> None:
         existing = await self.db.execute(
             select(EmbeddingTask).where(EmbeddingTask.note_id == note_id)
         )
@@ -70,7 +67,7 @@ class RAGRepository:
             task.attempts = 0
             task.error = None
         else:
-            self.db.add(EmbeddingTask(note_id=note_id))
+            self.db.add(EmbeddingTask(note_id=note_id, user_id=user_id))
         await self.db.flush()
 
     async def get_pending_tasks(self, limit: int = 20) -> list[EmbeddingTask]:
@@ -84,18 +81,15 @@ class RAGRepository:
 
     async def mark_processing(self, task_id: uuid.UUID) -> None:
         await self.db.execute(
-            update(EmbeddingTask)
-            .where(EmbeddingTask.id == task_id)
-            .values(status="processing")
+            update(EmbeddingTask).where(EmbeddingTask.id == task_id).values(status="processing")
         )
 
     async def mark_done(self, task_id: uuid.UUID) -> None:
-        await self.db.execute(
-            delete(EmbeddingTask).where(EmbeddingTask.id == task_id)
-        )
+        await self.db.execute(delete(EmbeddingTask).where(EmbeddingTask.id == task_id))
 
     async def mark_failed(self, task_id: uuid.UUID, error: str, attempts: int) -> None:
         from app.config import settings
+
         new_status = "failed" if attempts >= settings.embedding_max_attempts else "pending"
         await self.db.execute(
             update(EmbeddingTask)
@@ -104,6 +98,4 @@ class RAGRepository:
         )
 
     async def remove_task(self, note_id: uuid.UUID) -> None:
-        await self.db.execute(
-            delete(EmbeddingTask).where(EmbeddingTask.note_id == note_id)
-        )
+        await self.db.execute(delete(EmbeddingTask).where(EmbeddingTask.note_id == note_id))

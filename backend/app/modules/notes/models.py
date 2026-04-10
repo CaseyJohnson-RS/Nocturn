@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.database import Base
+from app.modules.tags.models import Tag
 
 
 class NoteTag(Base):
@@ -42,7 +43,7 @@ class Note(Base):
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    tags: Mapped[list["Tag"]] = relationship(  # noqa: F821
+    tags: Mapped[list["Tag"]] = relationship(
         secondary="note_tags",
         back_populates="notes",
     )
