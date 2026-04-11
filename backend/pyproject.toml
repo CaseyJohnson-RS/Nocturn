@@ -7,33 +7,31 @@ dependencies = [
     # Web framework
     "fastapi>=0.115,<1",
     "uvicorn[standard]>=0.34,<1",
-
     # Database
     "sqlalchemy[asyncio]>=2.0,<3",
     "asyncpg>=0.30,<1",
     "alembic>=1.15,<2",
     "pgvector>=0.3,<1",
-
     # Redis
     "redis[hiredis]>=5.0,<6",
-
     # Auth
     "pyjwt>=2.9,<3",
     "argon2-cffi>=23.1,<24",
-
     # Validation & settings
     "pydantic>=2.10,<3",
     "pydantic-settings>=2.7,<3",
     "email-validator>=2.2,<3",
-
     # HTTP client (RouterAI, email providers)
     "httpx>=0.28,<1",
-
+    # Email (Resend SDK)
+    "resend>=2.0,<3",
     # Sanitization
     "nh3>=0.2,<1",
-
     # Regex (ReDoS-safe)
     "google-re2>=1.1,<2",
+    "pytest>=8.4.2",
+    "google>=3.0.0",
+    "openai>=2.31.0",
 ]
 
 [project.optional-dependencies]
