@@ -1,74 +1,77 @@
-"""Thin async client for the RouterAI OpenAI-compatible API."""
+"""Thin async client for the RouterAI OpenAI-compatible API (SDK-based)."""
 
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
+from typing import Any
 
-import httpx
+from openai import AsyncOpenAI
 
 from app.config import settings
 
+# ---------------------------------------------------------------------------
+# region Client
 
-def _build_base_url() -> str:
-    return settings.routerai_base_url.rstrip("/")
+client = AsyncOpenAI(
+    api_key=settings.routerai_api_key,
+    base_url=settings.routerai_base_url.rstrip("/") + "/v1",
+)
 
-
-_HEADERS = {
-    "Authorization": f"Bearer {settings.routerai_api_key}",
-    "Content-Type": "application/json",
-}
-_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
-_MODEL_CONTEXT_CACHE: dict[str, int] = {}
+# endregion
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
-# Tool-calling support
+# region Cache
+
+MODEL_CONTEXT_CACHE: dict[str, int] = {}
+
+# endregion
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# region Tool-calling support
+
 
 @dataclass
 class ToolCall:
-    """A completed tool call parsed from streaming deltas."""
     id: str
     name: str
-    arguments: str  # raw JSON string
+    arguments: str
 
 
 class ChatCompletionAccumulator:
-    """Collects content and tool_calls from an OpenAI streaming response."""
-
     def __init__(self) -> None:
         self.content_parts: list[str] = []
         self.tool_calls: list[ToolCall] = []
-        self._tc_accum: dict[int, dict[str, str]] = {}
 
-    def feed_delta(self, delta: dict) -> str | None:
-        """Process a single delta dict. Returns content text if present."""
-        content = delta.get("content")
-        if content:
+    def feed_delta(self, delta: Any) -> str | None:
+        content = getattr(delta, "content", None)
+
+        if isinstance(content, str):
             self.content_parts.append(content)
 
-        for tc in delta.get("tool_calls", []):
-            idx = tc["index"]
-            if idx not in self._tc_accum:
-                self._tc_accum[idx] = {"id": "", "name": "", "arguments": ""}
-            state = self._tc_accum[idx]
-            if tc.get("id"):
-                state["id"] = tc["id"]
-            func = tc.get("function", {})
-            if func.get("name"):
-                state["name"] = func["name"]
-            state["arguments"] += func.get("arguments", "")
+        tool_calls = getattr(delta, "tool_calls", None)
+
+        if tool_calls:
+            for tc in tool_calls:
+                idx = tc.index if hasattr(tc, "index") else 0
+
+                while len(self.tool_calls) <= idx:
+                    self.tool_calls.append(ToolCall("", "", ""))
+
+                self.tool_calls[idx].id = getattr(tc, "id", "") or self.tool_calls[idx].id
+
+                func = getattr(tc, "function", None)
+                if func:
+                    if getattr(func, "name", None):
+                        self.tool_calls[idx].name = func.name
+
+                    if getattr(func, "arguments", None):
+                        self.tool_calls[idx].arguments += func.arguments
 
         return content
-
-    def finalize(self) -> None:
-        """Build final tool_calls list from accumulated deltas."""
-        self.tool_calls = [
-            ToolCall(id=s["id"], name=s["name"], arguments=s["arguments"])
-            for s in (self._tc_accum[i] for i in sorted(self._tc_accum))
-        ]
 
     @property
     def full_content(self) -> str:
@@ -76,109 +79,93 @@ class ChatCompletionAccumulator:
 
     @property
     def has_tool_calls(self) -> bool:
-        return bool(self._tc_accum)
+        return bool(self.tool_calls)
 
 
+# endregion
 # ---------------------------------------------------------------------------
-# API calls
+
 # ---------------------------------------------------------------------------
+# region API calls
+
 
 async def create_embeddings(texts: list[str]) -> list[list[float]]:
-    """Batch-embed texts. Returns one vector per input text."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        resp = await client.post(
-            f"{_build_base_url()}/embeddings",
-            headers=_HEADERS,
-            json={
-                "model": settings.routerai_embedding_model,
-                "input": texts,
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    items = sorted(data["data"], key=lambda d: d["index"])
-    return [item["embedding"] for item in items]
+    resp = await client.embeddings.create(
+        model=settings.routerai_embedding_model,
+        input=texts,
+    )
+    return [item.embedding for item in resp.data]
 
 
 async def get_model_context_length(model: str) -> int | None:
-    """Return the context window size for a model, if available."""
     if not model:
         return None
-    if model in _MODEL_CONTEXT_CACHE:
-        return _MODEL_CONTEXT_CACHE[model]
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        resp = await client.get(f"{_build_base_url()}/models", headers=_HEADERS)
-        resp.raise_for_status()
-        data = resp.json()
+    if model in MODEL_CONTEXT_CACHE:
+        return MODEL_CONTEXT_CACHE[model]
 
-    models: list[dict] = []
-    if isinstance(data, dict):
-        models = data.get("data", [])
-    elif isinstance(data, list):
-        for item in data:
-            if isinstance(item, dict):
-                models.extend(item.get("data", []))
+    resp = await client.models.list()
+
+    models: list[dict[str, Any]] = []
+
+    for m in resp.data:
+        models.append(m.model_dump())
 
     for item in models:
         if item.get("id") == model:
-            context_length = item.get("context_length")
-            if isinstance(context_length, int):
-                _MODEL_CONTEXT_CACHE[model] = context_length
-                return context_length
+            ctx = item.get("context_length")
+            if isinstance(ctx, int):
+                MODEL_CONTEXT_CACHE[model] = ctx
+                return ctx
+
     return None
 
 
+# endregion
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# region Streaming chat
+
+# FIXME: check types!
 async def chat_completion_stream(
-    messages: list[dict],
+    messages: list[dict[str, Any]],
     model: str | None = None,
-    tools: list[dict] | None = None,
+    tools: list[dict[str, Any]] | None = None,
     accumulator: ChatCompletionAccumulator | None = None,
-) -> AsyncGenerator[str]:
-    """Yield content deltas from a streaming chat completion.
+) -> AsyncGenerator[str, None]:
 
-    When *tools* and *accumulator* are provided, tool-call deltas are
-    collected in the accumulator.  After iteration the caller can inspect
-    ``accumulator.tool_calls``.
-
-    Without these parameters the function behaves exactly as before
-    (backward compatible).
-    """
     model = model or settings.routerai_llm_model
-    body: dict = {
-        "model": model,
-        "messages": messages,
-        "stream": True,
-    }
+
+    kwargs: dict[str, Any] = dict(
+        model=model,
+        messages=messages,
+        stream=True,
+    )
     if tools:
-        body["tools"] = tools
-        body["tool_choice"] = "auto"
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        async with client.stream(
-            "POST",
-            f"{_build_base_url()}/chat/completions",
-            headers=_HEADERS,
-            json=body,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line.startswith("data: "):
-                    continue
-                payload = line.removeprefix("data: ").strip()
-                if payload == "[DONE]":
-                    break
-                chunk = json.loads(payload)
-                delta = chunk["choices"][0].get("delta", {})
+    stream = await client.chat.completions.create(**kwargs) # type: ignore
 
-                if accumulator:
-                    content = accumulator.feed_delta(delta)
-                    if content:
-                        yield content
-                else:
-                    content = delta.get("content")
-                    if content:
-                        yield content
+    async for chunk in stream: # type: ignore
+        if not chunk.choices: # type: ignore
+            continue
 
-    if accumulator:
-        accumulator.finalize()
+        delta = chunk.choices[0].delta # type: ignore
+        if delta is None:
+            continue
+
+        if accumulator:
+            content = accumulator.feed_delta(delta)
+            if isinstance(content, str):
+                yield content
+            continue
+
+        content = getattr(delta, "content", None) # type: ignore
+        if isinstance(content, str):
+            yield content
+
+
+# endregion
+# ---------------------------------------------------------------------------
