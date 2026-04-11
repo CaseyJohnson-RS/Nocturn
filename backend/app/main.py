@@ -1,18 +1,19 @@
 import logging
 import subprocess
 import sys
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
 from app.common.database import async_session_factory, engine
+from app.common.email import init_email_service
 from app.common.redis import redis_client
+from app.config import settings
 from app.middleware.rate_limit import RateLimitMiddleware
-from app.modules.ai.router import router as ai_router
 from app.modules.admin.router import router as admin_router
+from app.modules.ai.router import router as ai_router
 from app.modules.auth.router import router as auth_router
 from app.modules.notes.router import router as notes_router
 from app.modules.profile.router import router as profile_router
@@ -36,6 +37,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _run_migrations()
     async with async_session_factory() as session:
         await seed_admin(session)
+
+    init_email_service()
 
     yield
 

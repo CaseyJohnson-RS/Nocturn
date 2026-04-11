@@ -7,6 +7,11 @@ class Settings(BaseSettings):
 
     # --- Database ---
     database_url: str = Field(description="PostgreSQL connection string")
+    database_echo: bool = Field(description="Logging SQL queries to the console", default=False)
+    database_pool_size: int = Field(description="Amount of permanent connections", default=10)
+    database_max_overflow: int = Field(
+        description="Max overflow of amount of permanent connections", default=5
+    )
 
     # --- Redis ---
     redis_url: str = Field(default="redis://redis:6379/0")
@@ -27,7 +32,7 @@ class Settings(BaseSettings):
     routerai_embedding_model: str = Field(default="")
 
     # --- Email ---
-    email_provider: str = Field(default="resend", description="resend or brevo")
+    email_provider: str = Field(default="resend", description="resend")
     email_api_key: str = Field(default="")
     email_from: str = Field(default="noreply@nocturn.example.com")
 
@@ -40,9 +45,9 @@ class Settings(BaseSettings):
     frontend_url: str = Field(default="http://localhost:3000")
 
     # --- Verification & reset ---
-    email_confirm_ttl_hours: int = Field(default=24)
+    email_confirm_ttl_hours: int = Field(default=2)
     password_reset_ttl_hours: int = Field(default=1)
-    unconfirmed_account_ttl_hours: int = Field(default=72)
+    unconfirmed_account_ttl_hours: int = Field(default=24)
 
     # --- Notes ---
     max_notes_per_user: int = Field(default=3000)
@@ -62,11 +67,11 @@ class Settings(BaseSettings):
     chat_session_ttl_days: int = Field(default=14)
     llm_first_token_timeout_seconds: int = Field(default=10)
     max_notes_in_bulk: int = Field(default=25)
-    max_attached_notes: int = Field(default=5)
+    max_attached_notes: int = Field(default=10)
     max_messages_in_context: int = Field(default=25)
-    system_prompt_tokens: int = Field(default=500)
-    safety_margin_tokens: int = Field(default=500)
-    planner_chars_per_token: float = Field(default=1.3)
+    system_prompt_tokens: int = Field(default=500)  # Recount!
+    safety_margin_tokens: int = Field(default=500)  # Recount!
+    planner_chars_per_token: float = Field(default=1.3)  # Depends on local
 
     # --- Embedding queue ---
     embedding_max_attempts: int = Field(default=3)
@@ -77,16 +82,12 @@ class Settings(BaseSettings):
     cleanup_interval_seconds: int = Field(default=3600)
 
     # --- Rate limiting ---
-    rate_auth_per_minute: int = Field(default=10)
-    rate_email_ops_per_minute: int = Field(default=3)
+    rate_auth_per_minute: int = Field(default=20)
+    rate_email_ops_per_minute: int = Field(default=5)
     rate_verify_per_minute: int = Field(default=5)
-    rate_refresh_per_minute: int = Field(default=30)
+    rate_refresh_per_minute: int = Field(default=15)
     rate_crud_per_minute: int = Field(default=120)
-    rate_ai_per_minute: int = Field(default=10)
-
-    # --- Presence ---
-    heartbeat_interval_seconds: int = Field(default=10)
-    presence_ttl_seconds: int = Field(default=30)
+    rate_ai_per_minute: int = Field(default=15)
 
     # --- Chunking ---
     chunk_size_tokens: int = Field(default=500)

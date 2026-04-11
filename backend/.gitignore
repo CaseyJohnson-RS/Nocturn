@@ -58,6 +58,7 @@ coverage.xml
 .dmypy.json
 dmypy.json
 .pyre/
+typings/
 
 # --- Linters ---
 .ruff_cache/
