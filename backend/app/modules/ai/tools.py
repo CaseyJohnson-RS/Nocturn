@@ -1,25 +1,25 @@
 """Planner & Executor tool definitions and backend handlers.
 
-This module defines:
+Implements AIS sections 3 and 4:
 - PLANNER_TOOLS: 13 OpenAI function-calling schemas for the Planner LLM
 - EXECUTOR_TOOLS: 4 tool schemas for the Executor LLM (batch_transform)
-- ToolExecutor: class that executes tool calls, returning results or
-  registering proposals / pending_confirmations in the actions list.
+- ToolExecutor: executes Planner tool calls, returns results or registers
+  proposals / pending_confirmations in the actions list.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import re2
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.modules.ai.locale import t
 from app.modules.notes.models import Note
 from app.modules.notes.repository import NotesRepository
 from app.modules.rag.service import RAGService
@@ -27,11 +27,23 @@ from app.modules.tags.repository import TagsRepository
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Planner tool schemas (OpenAI function-calling format)
-# ---------------------------------------------------------------------------
 
-_SEARCH_NOTES: dict = {
+def truncate_at_word(text: str, max_len: int) -> str:
+    """Truncate text at the last word boundary within max_len."""
+    if len(text) <= max_len:
+        return text
+    truncated = text[:max_len]
+    last_space = truncated.rfind(" ")
+    if last_space > max_len // 2:
+        truncated = truncated[:last_space]
+    return truncated + "…" # Yeah, single character triple dot)
+
+
+# ---------------------------------------------------------------------------
+# region Planner tool schemas (OpenAI function-calling format)
+
+
+_SEARCH_NOTES: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "search_notes",
@@ -74,13 +86,14 @@ _SEARCH_NOTES: dict = {
     },
 }
 
-_GET_NOTE: dict = {
+_GET_NOTE: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "get_note",
         "description": (
             "Get the full content of a note. Use only when full content is needed "
-            "(editing, detailed analysis). For general answers use content_preview from search_notes."
+            "(editing, detailed analysis). For general answers use content_preview "
+            "from search_notes."
         ),
         "parameters": {
             "type": "object",
@@ -92,7 +105,7 @@ _GET_NOTE: dict = {
     },
 }
 
-_LIST_TAGS: dict = {
+_LIST_TAGS: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "list_tags",
@@ -101,11 +114,13 @@ _LIST_TAGS: dict = {
     },
 }
 
-_PROPOSE_EDIT_NOTE: dict = {
+_PROPOSE_EDIT_NOTE: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "propose_edit_note",
-        "description": "Propose editing an existing note. At least one of title or content must be provided.",
+        "description": (
+            "Propose editing an existing note. At least one of title or content must be provided."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
@@ -118,7 +133,7 @@ _PROPOSE_EDIT_NOTE: dict = {
     },
 }
 
-_PROPOSE_CREATE_NOTE: dict = {
+_PROPOSE_CREATE_NOTE: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "propose_create_note",
@@ -128,14 +143,18 @@ _PROPOSE_CREATE_NOTE: dict = {
             "properties": {
                 "title": {"type": "string", "maxLength": 200},
                 "content": {"type": "string", "maxLength": 20000},
-                "tags": {"type": "array", "items": {"type": "string"}, "maxItems": 10},
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 10,
+                },
             },
             "required": [],
         },
     },
 }
 
-_PROPOSE_DELETE_NOTE: dict = {
+_PROPOSE_DELETE_NOTE: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "propose_delete_note",
@@ -150,7 +169,7 @@ _PROPOSE_DELETE_NOTE: dict = {
     },
 }
 
-_PROPOSE_ADD_TAGS: dict = {
+_PROPOSE_ADD_TAGS: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "propose_add_tags",
@@ -166,7 +185,7 @@ _PROPOSE_ADD_TAGS: dict = {
     },
 }
 
-_PROPOSE_REMOVE_TAGS: dict = {
+_PROPOSE_REMOVE_TAGS: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "propose_remove_tags",
@@ -182,11 +201,11 @@ _PROPOSE_REMOVE_TAGS: dict = {
     },
 }
 
-_BATCH_ADD_TAGS: dict = {
+_BATCH_ADD_TAGS: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "batch_add_tags",
-        "description": "Add tags to multiple notes. Requires user confirmation before execution.",
+        "description": ("Add tags to multiple notes. Requires user confirmation before execution."),
         "parameters": {
             "type": "object",
             "properties": {
@@ -202,7 +221,7 @@ _BATCH_ADD_TAGS: dict = {
     },
 }
 
-_BATCH_REMOVE_TAGS: dict = {
+_BATCH_REMOVE_TAGS: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "batch_remove_tags",
@@ -222,7 +241,7 @@ _BATCH_REMOVE_TAGS: dict = {
     },
 }
 
-_BATCH_DELETE: dict = {
+_BATCH_DELETE: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "batch_delete",
@@ -241,7 +260,7 @@ _BATCH_DELETE: dict = {
     },
 }
 
-_BATCH_REPLACE: dict = {
+_BATCH_REPLACE: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "batch_replace",
@@ -263,20 +282,24 @@ _BATCH_REPLACE: dict = {
                     "type": "array",
                     "items": {"type": "string", "enum": ["i", "m", "s"]},
                 },
-                "scope": {"type": "string", "enum": ["content", "title", "both"]},
+                "scope": {
+                    "type": "string",
+                    "enum": ["content", "title", "both"],
+                },
             },
             "required": ["note_ids", "pattern", "replacement"],
         },
     },
 }
 
-_BATCH_TRANSFORM: dict = {
+_BATCH_TRANSFORM: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "batch_transform",
         "description": (
             "Transform multiple notes using a natural-language instruction. "
-            "Each note is processed by a separate LLM call. Requires user confirmation."
+            "Each note is processed by a separate LLM call. "
+            "Requires user confirmation."
         ),
         "parameters": {
             "type": "object",
@@ -293,7 +316,7 @@ _BATCH_TRANSFORM: dict = {
     },
 }
 
-PLANNER_TOOLS: list[dict] = [
+PLANNER_TOOLS: list[dict[str, Any]] = [
     _SEARCH_NOTES,
     _GET_NOTE,
     _LIST_TAGS,
@@ -310,10 +333,10 @@ PLANNER_TOOLS: list[dict] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Executor tool schemas (for batch_transform one-shot calls)
+# Executor tool schemas
 # ---------------------------------------------------------------------------
 
-_EXEC_EDIT_NOTE: dict = {
+_EXEC_EDIT_NOTE: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "edit_note",
@@ -329,7 +352,7 @@ _EXEC_EDIT_NOTE: dict = {
     },
 }
 
-_EXEC_ADD_TAGS: dict = {
+_EXEC_ADD_TAGS: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "add_tags",
@@ -344,7 +367,7 @@ _EXEC_ADD_TAGS: dict = {
     },
 }
 
-_EXEC_REMOVE_TAGS: dict = {
+_EXEC_REMOVE_TAGS: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "remove_tags",
@@ -359,7 +382,7 @@ _EXEC_REMOVE_TAGS: dict = {
     },
 }
 
-_EXEC_DELETE_NOTE: dict = {
+_EXEC_DELETE_NOTE: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "delete_note",
@@ -368,7 +391,7 @@ _EXEC_DELETE_NOTE: dict = {
     },
 }
 
-EXECUTOR_TOOLS: list[dict] = [
+EXECUTOR_TOOLS: list[dict[str, Any]] = [
     _EXEC_EDIT_NOTE,
     _EXEC_ADD_TAGS,
     _EXEC_REMOVE_TAGS,
@@ -376,12 +399,11 @@ EXECUTOR_TOOLS: list[dict] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Read-only tool names (results go back into Planner context)
+# Tool name sets
 # ---------------------------------------------------------------------------
 
 READ_TOOL_NAMES = {"search_notes", "get_note", "list_tags"}
 
-# Proposal tool names (register a proposal, return confirmation to Planner)
 PROPOSE_TOOL_NAMES = {
     "propose_edit_note",
     "propose_create_note",
@@ -390,7 +412,6 @@ PROPOSE_TOOL_NAMES = {
     "propose_remove_tags",
 }
 
-# Bulk tool names (register a pending_confirmation)
 BATCH_TOOL_NAMES = {
     "batch_add_tags",
     "batch_remove_tags",
@@ -399,17 +420,19 @@ BATCH_TOOL_NAMES = {
     "batch_transform",
 }
 
+# endregion
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Proposal / confirmation helpers
-# ---------------------------------------------------------------------------
+# region Proposal / confirmation helpers
+
 
 def make_proposal(
     proposal_type: str,
     note_id: str | None,
-    data: dict,
-) -> dict:
-    """Create a proposal dict with pending status."""
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Create a proposal dict with pending status"""
     return {
         "type": "proposal",
         "id": str(uuid.uuid4()),
@@ -424,9 +447,9 @@ def make_proposal(
 def make_pending_confirmation(
     operation_type: str,
     note_ids: list[str],
-    params: dict,
-) -> dict:
-    """Create a pending_confirmation dict."""
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """Create a pending_confirmation dict"""
     return {
         "type": "pending_confirmation",
         "id": str(uuid.uuid4()),
@@ -438,53 +461,44 @@ def make_pending_confirmation(
     }
 
 
-# ---------------------------------------------------------------------------
-# Summary templates (AIS 2.5)
-# ---------------------------------------------------------------------------
+# --- Summary templates ---
 
-def _build_summary(action: dict, new_status: str) -> str:
+
+def build_summary(action: dict[str, Any], new_status: str) -> str:
     """Generate a deterministic summary string when status changes."""
     atype = action.get("type")
 
     if atype == "proposal":
         ptype = action.get("proposal_type", "")
-        data = action.get("data") or {}
+        data: dict[str, Any] = action.get("data") or {}
         title = data.get("title") or data.get("note_title") or "Untitled"
 
-        templates = {
-            ("edit_note", "applied"): f"Edited note \"{title}\"",
-            ("edit_note", "dismissed"): f"Dismissed edit for note \"{title}\"",
-            ("create_note", "applied"): f"Created note \"{title}\"",
-            ("create_note", "dismissed"): "Dismissed note creation",
-            ("delete_note", "applied"): f"Deleted note \"{title}\"",
-            ("delete_note", "dismissed"): f"Dismissed deletion of note \"{title}\"",
-            ("add_tags", "applied"): (
-                f"Added tags [{', '.join(data.get('tags', []))}] "
-                f"to note \"{title}\""
-            ),
-            ("add_tags", "dismissed"): f"Dismissed tag addition for note \"{title}\"",
-            ("remove_tags", "applied"): (
-                f"Removed tags [{', '.join(data.get('tags', []))}] "
-                f"from note \"{title}\""
-            ),
-            ("remove_tags", "dismissed"): f"Dismissed tag removal for note \"{title}\"",
-        }
-        return templates.get((ptype, new_status), f"{ptype} — {new_status}")
+        key = f"{ptype}_{new_status}"
+        kwargs: dict[str, str] = {"title": title}
+        if ptype in ("add_tags", "remove_tags") and new_status == "applied":
+            kwargs["tags"] = ", ".join(data.get("tags", []))
 
-    elif atype == "pending_confirmation":
+        try:
+            return t(key, **kwargs)
+        except KeyError:
+            return f"{ptype} — {new_status}"
+
+    if atype == "pending_confirmation":
         op = action.get("operation_type", "")
         n = len(action.get("note_ids", []))
         if new_status == "dismissed":
-            return f"{op} for {n} notes — dismissed"
-        # confirmed summary is set after proposals are generated
-        return f"{op} for {n} notes — confirmed"
+            return t("bulk_dismissed", op=op, n=n)
+        return t("bulk_confirmed", op=op, n=n)
 
     return f"{atype} — {new_status}"
 
 
+# endregion
 # ---------------------------------------------------------------------------
-# ToolExecutor — handles tool calls from Planner
+
 # ---------------------------------------------------------------------------
+# region ToolExecutor — handles Planner tool calls
+
 
 class ToolExecutor:
     """Executes Planner tool calls, returning JSON results or registering
@@ -494,7 +508,7 @@ class ToolExecutor:
         self,
         db: AsyncSession,
         user_id: uuid.UUID,
-        actions: list[dict],
+        actions: list[dict[str, str]],
     ):
         self.db = db
         self.user_id = user_id
@@ -502,19 +516,29 @@ class ToolExecutor:
         self.notes_repo = NotesRepository(db)
         self.tags_repo = TagsRepository(db)
         self.rag = RAGService(db)
-        # Track proposals per (type, note_id) for dedup
         self._proposal_keys: set[tuple[str, str | None]] = set()
+        self._has_batch = False  # At most one batch per response
 
     async def execute(self, name: str, arguments: str) -> str:
         """Execute a tool call and return the JSON result string."""
         try:
-            args = json.loads(arguments) if arguments else {}
+            args: Any = json.loads(arguments) if arguments else {}
         except json.JSONDecodeError:
-            return json.dumps({"error": "invalid_json", "details": "Could not parse tool arguments"})
+            return json.dumps(
+                {
+                    "error": "invalid_json",
+                    "details": "Could not parse tool arguments",
+                }
+            )
 
         handler = getattr(self, f"_handle_{name}", None)
         if handler is None:
-            return json.dumps({"error": "unknown_tool", "details": f"Tool '{name}' not found"})
+            return json.dumps(
+                {
+                    "error": "unknown_tool",
+                    "details": f"Tool '{name}' not found",
+                }
+            )
 
         try:
             result = await handler(args)
@@ -525,52 +549,63 @@ class ToolExecutor:
 
     # --- Read tools ---
 
-    async def _handle_search_notes(self, args: dict) -> dict:
+    async def _handle_search_notes(self, args: dict[str, Any]) -> dict[str, Any]:
         query = args.get("query")
         search_mode = args.get("search_mode")
         limit = min(args.get("limit", 5), settings.max_sources_per_response)
         sort_by = args.get("sort_by")
-        sort_order = args.get("sort_order", "desc")
 
+        # Validation
         if sort_by == "relevance" and not query:
-            return {"error": "validation_error", "details": "relevance sort requires query"}
+            return {
+                "error": "validation_error",
+                "details": "relevance sort requires query",
+            }
         if query and not search_mode:
-            return {"error": "validation_error", "details": "search_mode required when query is set"}
+            return {
+                "error": "validation_error",
+                "details": "search_mode required when query is set",
+            }
 
         # Semantic search via RAG
         if query and search_mode == "semantic":
             try:
-                search_resp = await self.rag.search(self.user_id, query, limit=limit)
-                notes_out = []
-                for r in search_resp.results:
-                    note = await self.notes_repo.get_active_note(r.note_id, self.user_id)
-                    if note:
-                        notes_out.append({
-                            "note_id": str(note.id),
-                            "title": note.title,
-                            "content_preview": (note.content or "")[:100],
-                            "tags": [t.name for t in note.tags],
-                            "created_at": note.created_at.isoformat(),
-                            "updated_at": note.updated_at.isoformat(),
-                            "relevance_score": r.score,
-                        })
+                search_resp = await self.rag.search(
+                    self.user_id,
+                    query,
+                    limit=limit,
+                )
+                if not search_resp.results:
+                    return {"total_count": 0, "notes": []}
+
+                note_ids = [r.note_id for r in search_resp.results]
+                notes = await self.notes_repo.get_active_notes_by_ids(
+                    note_ids,
+                    self.user_id,
+                )
+                notes_map = {n.id: n for n in notes}
+                scores_map = {r.note_id: r.score for r in search_resp.results}
+
+                notes_out = [
+                    self._format_note_result(notes_map[nid], scores_map.get(nid))
+                    for nid in note_ids
+                    if nid in notes_map
+                ]
                 return {"total_count": len(notes_out), "notes": notes_out}
             except Exception as e:
                 logger.warning("Semantic search failed: %s", e)
                 return {"error": "embedding_unavailable", "details": str(e)}
 
         # Fulltext / filter-based search
-        tag_names = args.get("tags", [])
-        tag_ids = None
-        if tag_names:
-            tags = []
-            for tn in tag_names:
-                t = await self.tags_repo.get_tag_by_name(self.user_id, tn)
-                if t:
-                    tags.append(t)
-            tag_ids = [t.id for t in tags]
-            if not tag_ids:
-                return {"total_count": 0, "notes": []}
+        tag_ids = await self._resolve_tag_ids(args.get("tags", []))
+        if args.get("tags") and tag_ids is None:
+            return {"total_count": 0, "notes": []}
+
+        exclude_tag_ids = await self._resolve_tag_ids(
+            args.get("exclude_tags", []),
+        )
+
+        date_filters = self._parse_date_filters(args)
 
         notes, total = await self.notes_repo.list_notes(
             user_id=self.user_id,
@@ -578,57 +613,16 @@ class ToolExecutor:
             offset=0,
             search=query if (query and search_mode == "fulltext") else None,
             tag_ids=tag_ids,
+            exclude_tag_ids=exclude_tag_ids,
+            **date_filters,  # type: ignore POINT OF POTENTIAL PROBLEMS!
         )
 
-        # Apply date filters in-memory (simple for small scale)
-        notes = self._apply_date_filters(notes, args)
-
-        # Apply exclude_tags filter
-        exclude_tag_names = {t.lower() for t in args.get("exclude_tags", [])}
-        if exclude_tag_names:
-            notes = [
-                n for n in notes
-                if not any(t.name.lower() in exclude_tag_names for t in n.tags)
-            ]
-
-        notes_out = []
-        for note in notes[:limit]:
-            notes_out.append({
-                "note_id": str(note.id),
-                "title": note.title,
-                "content_preview": (note.content or "")[:100],
-                "tags": [t.name for t in note.tags],
-                "created_at": note.created_at.isoformat(),
-                "updated_at": note.updated_at.isoformat(),
-            })
-
+        notes_out = [self._format_note_result(n) for n in notes]
         return {"total_count": total, "notes": notes_out}
 
-    def _apply_date_filters(self, notes: list[Note], args: dict) -> list[Note]:
-        result = notes
-        for field, attr in [
-            ("created_from", "created_at"),
-            ("created_to", "created_at"),
-            ("updated_from", "updated_at"),
-            ("updated_to", "updated_at"),
-        ]:
-            val = args.get(field)
-            if not val:
-                continue
-            try:
-                dt = datetime.fromisoformat(val)
-            except ValueError:
-                continue
-            if "from" in field:
-                result = [n for n in result if getattr(n, attr) >= dt]
-            else:
-                result = [n for n in result if getattr(n, attr) <= dt]
-        return result
-
-    async def _handle_get_note(self, args: dict) -> dict:
-        try:
-            note_id = uuid.UUID(args["note_id"])
-        except (KeyError, ValueError):
+    async def _handle_get_note(self, args: dict[str, Any]) -> dict[str, Any]:
+        note_id = self._parse_uuid(args.get("note_id"))
+        if note_id is None:
             return {"error": "validation_error", "details": "Invalid note_id"}
 
         note = await self.notes_repo.get_active_note(note_id, self.user_id)
@@ -645,32 +639,37 @@ class ToolExecutor:
             "updated_at": note.updated_at.isoformat(),
         }
 
-    async def _handle_list_tags(self, args: dict) -> list[dict]:
-        from sqlalchemy import func, select
-        from app.modules.notes.models import NoteTag
-
-        tags, _ = await self.tags_repo.list_tags(self.user_id, limit=settings.max_tags_per_user)
-        result = []
+    async def _handle_list_tags(self, args: Any) -> list[dict[str, Any]]:
+        tags, _ = await self.tags_repo.list_tags(
+            self.user_id,
+            limit=settings.max_tags_per_user,
+        )
+        result: list[dict[str, Any]] = []
         for tag in tags:
-            result.append({
-                "tag_id": str(tag.id),
-                "name": tag.name,
-                "notes_count": len(tag.notes) if hasattr(tag, "notes") and tag.notes else 0,
-            })
+            notes_count = len(tag.notes) if tag.notes else 0  # type: ignore
+            result.append(
+                {
+                    "tag_id": str(tag.id),
+                    "name": tag.name,
+                    "notes_count": notes_count,
+                }
+            )
         return result
 
     # --- Proposal tools ---
 
-    async def _handle_propose_edit_note(self, args: dict) -> dict:
-        try:
-            note_id = uuid.UUID(args["note_id"])
-        except (KeyError, ValueError):
+    async def _handle_propose_edit_note(self, args: dict[str, Any]) -> dict[str, Any]:
+        note_id = self._parse_uuid(args.get("note_id"))
+        if note_id is None:
             return {"error": "validation_error", "details": "Invalid note_id"}
 
         title = args.get("title")
         content = args.get("content")
         if title is None and content is None:
-            return {"error": "validation_error", "details": "At least title or content required"}
+            return {
+                "error": "validation_error",
+                "details": "At least title or content required",
+            }
 
         note = await self.notes_repo.get_active_note(note_id, self.user_id)
         if not note:
@@ -681,25 +680,37 @@ class ToolExecutor:
             return {"error": "duplicate_proposal"}
         self._proposal_keys.add(key)
 
-        data = {"title": title, "content": content}
-        proposal = make_proposal("edit_note", str(note_id), data)
+        proposal = make_proposal(
+            "edit_note",
+            str(note_id),
+            {"title": title, "content": content},
+        )
         self.actions.append(proposal)
         return {"proposal_id": proposal["id"], "status": "registered"}
 
-    async def _handle_propose_create_note(self, args: dict) -> dict:
-        data = {
-            "title": args.get("title"),
-            "content": args.get("content"),
-            "tags": args.get("tags", []),
-        }
-        proposal = make_proposal("create_note", None, data)
+    async def _handle_propose_create_note(self, args: dict[str, Any]) -> dict[str, Any]:
+        tags = args.get("tags", [])
+        if len(tags) > settings.max_tags_per_note:
+            return {
+                "error": "validation_error",
+                "details": f"Maximum {settings.max_tags_per_note} tags allowed",
+            }
+
+        proposal = make_proposal(
+            "create_note",
+            None,
+            {
+                "title": args.get("title"),
+                "content": args.get("content"),
+                "tags": tags,
+            },
+        )
         self.actions.append(proposal)
         return {"proposal_id": proposal["id"], "status": "registered"}
 
-    async def _handle_propose_delete_note(self, args: dict) -> dict:
-        try:
-            note_id = uuid.UUID(args["note_id"])
-        except (KeyError, ValueError):
+    async def _handle_propose_delete_note(self, args: dict[str, Any]) -> dict[str, Any]:
+        note_id = self._parse_uuid(args.get("note_id"))
+        if note_id is None:
             return {"error": "validation_error", "details": "Invalid note_id"}
 
         note = await self.notes_repo.get_active_note(note_id, self.user_id)
@@ -711,15 +722,17 @@ class ToolExecutor:
             return {"error": "duplicate_proposal"}
         self._proposal_keys.add(key)
 
-        data = {"note_title": note.title or "Untitled"}
-        proposal = make_proposal("delete_note", str(note_id), data)
+        proposal = make_proposal(
+            "delete_note",
+            str(note_id),
+            {"note_title": note.title or "Untitled"},
+        )
         self.actions.append(proposal)
         return {"proposal_id": proposal["id"], "status": "registered"}
 
-    async def _handle_propose_add_tags(self, args: dict) -> dict:
-        try:
-            note_id = uuid.UUID(args["note_id"])
-        except (KeyError, ValueError):
+    async def _handle_propose_add_tags(self, args: dict[str, Any]) -> dict[str, Any]:
+        note_id = self._parse_uuid(args.get("note_id"))
+        if note_id is None:
             return {"error": "validation_error", "details": "Invalid note_id"}
 
         tags = args.get("tags", [])
@@ -730,20 +743,26 @@ class ToolExecutor:
         if not note:
             return {"error": "note_not_found"}
 
+        # Check tag limit
+        current_count = len(note.tags) if note.tags else 0
+        if current_count + len(tags) > settings.max_tags_per_note:
+            return {
+                "error": "validation_error",
+                "details": f"Would exceed {settings.max_tags_per_note} tags limit",
+            }
+
         key = ("add_tags", str(note_id))
         if key in self._proposal_keys:
             return {"error": "duplicate_proposal"}
         self._proposal_keys.add(key)
 
-        data = {"tags": tags}
-        proposal = make_proposal("add_tags", str(note_id), data)
+        proposal = make_proposal("add_tags", str(note_id), {"tags": tags})
         self.actions.append(proposal)
         return {"proposal_id": proposal["id"], "status": "registered"}
 
-    async def _handle_propose_remove_tags(self, args: dict) -> dict:
-        try:
-            note_id = uuid.UUID(args["note_id"])
-        except (KeyError, ValueError):
+    async def _handle_propose_remove_tags(self, args: dict[str, Any]) -> dict[str, Any]:
+        note_id = self._parse_uuid(args.get("note_id"))
+        if note_id is None:
             return {"error": "validation_error", "details": "Invalid note_id"}
 
         tags = args.get("tags", [])
@@ -759,44 +778,22 @@ class ToolExecutor:
             return {"error": "duplicate_proposal"}
         self._proposal_keys.add(key)
 
-        data = {"tags": tags}
-        proposal = make_proposal("remove_tags", str(note_id), data)
+        proposal = make_proposal("remove_tags", str(note_id), {"tags": tags})
         self.actions.append(proposal)
         return {"proposal_id": proposal["id"], "status": "registered"}
 
     # --- Batch tools ---
 
-    async def _validate_batch_note_ids(
-        self, raw_ids: list[str],
-    ) -> tuple[list[str], list[str]]:
-        """Validate note_ids: return (valid_ids, excluded_ids)."""
-        if len(raw_ids) > settings.max_notes_in_bulk:
-            raise ValueError(f"too_many_notes: max {settings.max_notes_in_bulk}")
-
-        valid, excluded = [], []
-        for raw in raw_ids:
-            try:
-                nid = uuid.UUID(raw)
-            except ValueError:
-                excluded.append(raw)
-                continue
-            note = await self.notes_repo.get_active_note(nid, self.user_id)
-            if note:
-                valid.append(str(nid))
-            else:
-                excluded.append(raw)
-        return valid, excluded
-
-    async def _handle_batch_add_tags(self, args: dict) -> dict:
+    async def _handle_batch_add_tags(self, args: dict[str, Any]) -> dict[str, Any]:
         return await self._register_batch("add_tags", args, has_tags=True)
 
-    async def _handle_batch_remove_tags(self, args: dict) -> dict:
+    async def _handle_batch_remove_tags(self, args: dict[str, Any]) -> dict[str, Any]:
         return await self._register_batch("remove_tags", args, has_tags=True)
 
-    async def _handle_batch_delete(self, args: dict) -> dict:
+    async def _handle_batch_delete(self, args: dict[str, Any]) -> dict[str, Any]:
         return await self._register_batch("delete", args)
 
-    async def _handle_batch_replace(self, args: dict) -> dict:
+    async def _handle_batch_replace(self, args: dict[str, Any]) -> dict[str, Any]:
         pattern = args.get("pattern", "")
         replacement = args.get("replacement", "")
         flags = args.get("flags", [])
@@ -804,10 +801,10 @@ class ToolExecutor:
 
         # Validate RE2 pattern
         try:
-            re2.compile(pattern)
+            re2.compile(pattern)  # type: ignore
         except Exception as e:
             err_str = str(e)
-            if "lookbehind" in err_str or "lookahead" in err_str or "backreference" in err_str:
+            if any(kw in err_str for kw in ("lookbehind", "lookahead", "backreference")):
                 return {"error": "unsupported_pattern", "details": err_str}
             return {"error": "invalid_pattern", "details": err_str}
 
@@ -819,27 +816,39 @@ class ToolExecutor:
         }
         return await self._register_batch("replace", args, extra_params=params)
 
-    async def _handle_batch_transform(self, args: dict) -> dict:
+    async def _handle_batch_transform(self, args: dict[str, Any]) -> dict[str, Any]:
         instruction = args.get("instruction", "")
         if not instruction:
-            return {"error": "validation_error", "details": "instruction required"}
-
+            return {
+                "error": "validation_error",
+                "details": "instruction required",
+            }
         params = {"instruction": instruction}
         return await self._register_batch("transform", args, extra_params=params)
 
     async def _register_batch(
         self,
         operation_type: str,
-        args: dict,
+        args: dict[str, Any],
         has_tags: bool = False,
-        extra_params: dict | None = None,
-    ) -> dict:
-        raw_ids = args.get("note_ids", [])
-        try:
-            valid_ids, excluded_ids = await self._validate_batch_note_ids(raw_ids)
-        except ValueError as e:
-            return {"error": str(e).split(":")[0], "max": settings.max_notes_in_bulk}
+        extra_params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Common batch registration: validate note_ids, enforce one-batch
+        limit, register pending_confirmation."""
+        if self._has_batch:
+            return {
+                "error": "validation_error",
+                "details": "Only one batch operation per response",
+            }
 
+        raw_ids = args.get("note_ids", [])
+        if len(raw_ids) > settings.max_notes_in_bulk:
+            return {
+                "error": "too_many_notes",
+                "max": settings.max_notes_in_bulk,
+            }
+
+        valid_ids, excluded_ids = await self._validate_batch_note_ids(raw_ids)
         if not valid_ids:
             return {"error": "no_valid_notes"}
 
@@ -849,6 +858,7 @@ class ToolExecutor:
 
         pc = make_pending_confirmation(operation_type, valid_ids, params)
         self.actions.append(pc)
+        self._has_batch = True
 
         result: dict[str, Any] = {
             "confirmation_id": pc["id"],
@@ -859,48 +869,137 @@ class ToolExecutor:
             result["excluded_note_ids"] = excluded_ids
         return result
 
+    # --- Private helpers ---
+
+    async def _validate_batch_note_ids(
+        self,
+        raw_ids: list[str],
+    ) -> tuple[list[str], list[str]]:
+        """Validate note_ids: return (valid_ids, excluded_ids)."""
+        parsed: dict[str, uuid.UUID] = {}
+        excluded: list[str] = []
+        for raw in raw_ids:
+            nid = self._parse_uuid(raw)
+            if nid is None:
+                excluded.append(raw)
+            else:
+                parsed[str(nid)] = nid
+
+        if not parsed:
+            return [], excluded
+
+        notes = await self.notes_repo.get_active_notes_by_ids(
+            list(parsed.values()),
+            self.user_id,
+        )
+        found_ids = {str(n.id) for n in notes}
+        valid = [sid for sid in parsed if sid in found_ids]
+        excluded.extend(sid for sid in parsed if sid not in found_ids)
+        return valid, excluded
+
+    async def _resolve_tag_ids(
+        self,
+        tag_names: list[str],
+    ) -> list[uuid.UUID] | None:
+        """Resolve tag names to IDs. Returns None if no names given."""
+        if not tag_names:
+            return None
+        tags = await self.tags_repo.get_tags_by_names(self.user_id, tag_names)
+        return [t.id for t in tags] if tags else None
+
+    @staticmethod
+    def _parse_uuid(value: Any) -> uuid.UUID | None:
+        if value is None:
+            return None
+        try:
+            return uuid.UUID(str(value))
+        except (ValueError, AttributeError):
+            return None
+
+    @staticmethod
+    def _format_note_result(
+        note: Note,
+        relevance_score: float | None = None,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "note_id": str(note.id),
+            "title": note.title,
+            "content_preview": truncate_at_word(note.content or "", 100),
+            "tags": [t.name for t in note.tags],
+            "created_at": note.created_at.isoformat(),
+            "updated_at": note.updated_at.isoformat(),
+        }
+        if relevance_score is not None:
+            result["relevance_score"] = relevance_score
+        return result
+
+    @staticmethod
+    def _parse_date_filters(args: dict[str, Any]) -> dict[str, datetime | None]:
+        """Parse ISO 8601 date strings into datetime objects for SQL filters."""
+        result: dict[str, datetime | None] = {}
+        for field in ("created_from", "created_to", "updated_from", "updated_to"):
+            val = args.get(field)
+            if not val:
+                continue
+            try:
+                result[field] = datetime.fromisoformat(val)
+            except ValueError:
+                continue
+        return result
+
+
+# endregion
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Bulk operation executor (runs after user confirmation)
-# ---------------------------------------------------------------------------
+# region Deterministic bulk proposal generation
+
 
 async def generate_deterministic_proposals(
     db: AsyncSession,
     user_id: uuid.UUID,
-    confirmation: dict,
-) -> list[dict]:
-    """Generate proposals for deterministic batch operations (no LLM needed)."""
+    confirmation: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Generate proposals for deterministic batch operations (no LLM)."""
     op = confirmation["operation_type"]
     note_ids = confirmation["note_ids"]
     params = confirmation.get("params", {})
     notes_repo = NotesRepository(db)
 
-    proposals: list[dict] = []
+    proposals: list[dict[str, Any]] = []
 
     for raw_id in note_ids:
-        try:
-            nid = uuid.UUID(raw_id)
-        except ValueError:
+        nid = _safe_uuid(raw_id)
+        if nid is None:
             continue
         note = await notes_repo.get_active_note(nid, user_id)
         if not note:
             continue
 
         if op == "add_tags":
-            proposals.append(make_proposal(
-                "add_tags", str(nid), {"tags": params.get("tags", [])},
-            ))
-
+            proposals.append(
+                make_proposal(
+                    "add_tags",
+                    str(nid),
+                    {"tags": params.get("tags", [])},
+                )
+            )
         elif op == "remove_tags":
-            proposals.append(make_proposal(
-                "remove_tags", str(nid), {"tags": params.get("tags", [])},
-            ))
-
+            proposals.append(
+                make_proposal(
+                    "remove_tags",
+                    str(nid),
+                    {"tags": params.get("tags", [])},
+                )
+            )
         elif op == "delete":
-            proposals.append(make_proposal(
-                "delete_note", str(nid), {"note_title": note.title or "Untitled"},
-            ))
-
+            proposals.append(
+                make_proposal(
+                    "delete_note",
+                    str(nid),
+                    {"note_title": note.title or "Untitled"},
+                )
+            )
         elif op == "replace":
             new_proposals = _apply_replace(note, params)
             proposals.extend(new_proposals)
@@ -908,42 +1007,56 @@ async def generate_deterministic_proposals(
     return proposals
 
 
-def _apply_replace(note: Note, params: dict) -> list[dict]:
-    """Apply regex replacement and return an edit_note proposal if changed."""
+def _apply_replace(note: Note, params: dict[str, Any]) -> list[dict[str, Any]]:
+    """Apply regex replacement and return edit_note proposal if changed."""
     pattern = params.get("pattern", "")
     replacement = params.get("replacement", "")
     flags_list = params.get("flags", [])
     scope = params.get("scope", "content")
 
-    re2_flags = 0
-    # RE2 Python binding: re2.IGNORECASE etc.
-    flag_map = {"i": re2.IGNORECASE, "m": re2.MULTILINE, "s": re2.DOTALL}
+    opts = re2.Options()
     for f in flags_list:
-        if f in flag_map:
-            re2_flags |= flag_map[f]
+        if f == "i":
+            opts.case_sensitive = False
+        elif f == "s":
+            opts.dot_nl = True
+        elif f == "m":
+            opts.one_line = False
 
-    compiled = re2.compile(pattern, re2_flags)
+    compiled = re2.compile(pattern, opts)  # type: ignore
     new_title = note.title
     new_content = note.content
     changed = False
 
     if scope in ("title", "both") and note.title:
-        replaced = compiled.sub(replacement, note.title)
+        replaced = compiled.sub(replacement, note.title)  # _Regexp # type: ignore
         if replaced != note.title:
-            new_title = replaced
+            new_title = replaced  # str # type: ignore
             changed = True
 
     if scope in ("content", "both") and note.content:
-        replaced = compiled.sub(replacement, note.content)
+        replaced = compiled.sub(replacement, note.content)  # _Regexp # type: ignore
         if replaced != note.content:
-            new_content = replaced
+            new_content = replaced  # str # type: ignore
             changed = True
 
-    if changed:
-        data: dict = {}
-        if new_title != note.title:
-            data["title"] = new_title
-        if new_content != note.content:
-            data["content"] = new_content
-        return [make_proposal("edit_note", str(note.id), data)]
-    return []
+    if not changed:
+        return []
+
+    data: dict[str, Any] = {}
+    if new_title != note.title:
+        data["title"] = new_title
+    if new_content != note.content:
+        data["content"] = new_content
+    return [make_proposal("edit_note", str(note.id), data)]
+
+
+def _safe_uuid(value: Any) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, AttributeError):
+        return None
+
+
+# endregion
+# ---------------------------------------------------------------------------

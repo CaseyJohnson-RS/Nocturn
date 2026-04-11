@@ -58,6 +58,11 @@ class NotesRepository:
         deleted: bool = False,
         search: str | None = None,
         tag_ids: list[uuid.UUID] | None = None,
+        exclude_tag_ids: list[uuid.UUID] | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+        updated_from: datetime | None = None,
+        updated_to: datetime | None = None,
     ) -> tuple[list[Note], int]:
         query = select(Note).options(selectinload(Note.tags)).where(Note.user_id == user_id)
         count_query = select(func.count(Note.id)).where(Note.user_id == user_id)
@@ -76,16 +81,31 @@ class NotesRepository:
             count_query = count_query.where(search_filter)
 
         if tag_ids:
-            query = query.where(
-                Note.id.in_(
-                    select(NoteTag.note_id).where(NoteTag.tag_id.in_(tag_ids))
-                )
+            tag_filter = Note.id.in_(
+                select(NoteTag.note_id).where(NoteTag.tag_id.in_(tag_ids))
             )
-            count_query = count_query.where(
-                Note.id.in_(
-                    select(NoteTag.note_id).where(NoteTag.tag_id.in_(tag_ids))
-                )
+            query = query.where(tag_filter)
+            count_query = count_query.where(tag_filter)
+
+        if exclude_tag_ids:
+            exclude_filter = Note.id.not_in(
+                select(NoteTag.note_id).where(NoteTag.tag_id.in_(exclude_tag_ids))
             )
+            query = query.where(exclude_filter)
+            count_query = count_query.where(exclude_filter)
+
+        if created_from:
+            query = query.where(Note.created_at >= created_from)
+            count_query = count_query.where(Note.created_at >= created_from)
+        if created_to:
+            query = query.where(Note.created_at <= created_to)
+            count_query = count_query.where(Note.created_at <= created_to)
+        if updated_from:
+            query = query.where(Note.updated_at >= updated_from)
+            count_query = count_query.where(Note.updated_at >= updated_from)
+        if updated_to:
+            query = query.where(Note.updated_at <= updated_to)
+            count_query = count_query.where(Note.updated_at <= updated_to)
 
         query = query.order_by(Note.updated_at.desc()).limit(limit).offset(offset)
 
@@ -153,5 +173,22 @@ class NotesRepository:
             select(Note)
             .options(selectinload(Note.tags))
             .where(Note.id.in_(note_ids), Note.user_id == user_id)
+        )
+        return list(result.scalars().all())
+
+    async def get_active_notes_by_ids(
+        self, note_ids: list[uuid.UUID], user_id: uuid.UUID
+    ) -> list[Note]:
+        """Batch lookup for active (non-deleted) notes."""
+        if not note_ids:
+            return []
+        result = await self.db.execute(
+            select(Note)
+            .options(selectinload(Note.tags))
+            .where(
+                Note.id.in_(note_ids),
+                Note.user_id == user_id,
+                Note.deleted_at.is_(None),
+            )
         )
         return list(result.scalars().all())

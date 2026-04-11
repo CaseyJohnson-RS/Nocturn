@@ -23,7 +23,7 @@ class Tag(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    notes: Mapped[list["Note"]] = relationship(  # noqa: F821
+    notes: Mapped[list["Note"]] = relationship(  # noqa: F821 # type: ignore
         secondary="note_tags",
         back_populates="tags",
     )

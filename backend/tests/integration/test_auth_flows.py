@@ -126,21 +126,25 @@ class TestFullAuthFlow:
         assert resp.json()["nickname"] == VALID_USER["nickname"]
 
         # 4. Refresh
-        resp = await client.post(REFRESH, cookies={COOKIE: refresh})
+        client.cookies.set(COOKIE, refresh)
+        resp = await client.post(REFRESH)
         assert resp.status_code == 200
         new_refresh = resp.cookies.get(COOKIE)
 
         # 5. Old refresh token is revoked
-        resp = await client.post(REFRESH, cookies={COOKIE: refresh})
+        client.cookies.set(COOKIE, refresh)
+        resp = await client.post(REFRESH)
         assert resp.status_code == 401
 
         # 6. Logout
         assert new_refresh is not None
-        resp = await client.post(LOGOUT, cookies={COOKIE: new_refresh})
+        client.cookies.set(COOKIE, new_refresh)
+        resp = await client.post(LOGOUT)
         assert resp.status_code == 200
 
         # 7. Refresh after logout fails
-        resp = await client.post(REFRESH, cookies={COOKIE: new_refresh})
+        client.cookies.set(COOKIE, new_refresh)
+        resp = await client.post(REFRESH)
         assert resp.status_code == 401
 
 
@@ -226,8 +230,11 @@ class TestPasswordResetFlow:
         raw_token = mock_email.call_args[0][1]
         await client.post(RESET, json={"token": raw_token, "new_password": "NewValid1pass"})
 
+        # Set cookie on CLIENT INSTANCE (no more warning)
+        client.cookies.set(COOKIE, refresh)
+
         # Old refresh token is dead
-        resp = await client.post(REFRESH, cookies={COOKIE: refresh})
+        resp = await client.post(REFRESH)  # No cookies= param needed
         assert resp.status_code == 401
 
 

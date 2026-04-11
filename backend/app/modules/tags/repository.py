@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.tags.models import Tag
@@ -64,6 +64,21 @@ class TagsRepository:
     async def delete_tag(self, tag: Tag) -> None:
         await self.db.delete(tag)
         await self.db.flush()
+
+    async def get_tags_by_names(
+        self, user_id: uuid.UUID, names: list[str],
+    ) -> list[Tag]:
+        """Batch lookup of tags by name (case-insensitive)."""
+        if not names:
+            return []
+        lower_names = [n.lower() for n in names]
+        result = await self.db.execute(
+            select(Tag).where(
+                Tag.user_id == user_id,
+                func.lower(Tag.name).in_(lower_names),
+            )
+        )
+        return list(result.scalars().all())
 
     async def count_user_tags(self, user_id: uuid.UUID) -> int:
         result = await self.db.execute(
