@@ -8,10 +8,12 @@ services:
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nocturn"]
+      test: ["CMD-SHELL", "pg_isready -U nocturn -d nocturn_test"]
       interval: 2s
       timeout: 3s
       retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data
 
   redis-test:
     image: redis:alpine
@@ -22,24 +24,4 @@ services:
       interval: 2s
       timeout: 3s
       retries: 10
-
-  backend-test:
-    build:
-      context: ./backend
-      args:
-        INSTALL_DEV: "true"
-    working_dir: /app
-    command: ["./.venv/bin/python", "-m", "pytest", "-q"]
-    environment:
-      DATABASE_URL: postgresql+asyncpg://nocturn:nocturn_test@postgres-test/nocturn_test
-      REDIS_URL: redis://redis-test:6379/0
-      JWT_SECRET: testsecret1234567890testsecret123456
-      ROUTERAI_API_KEY: ""
-      ROUTERAI_LLM_MODEL: ""
-      ROUTERAI_EMBEDDING_MODEL: ""
-      FRONTEND_URL: http://localhost:3000
-    depends_on:
-      postgres-test:
-        condition: service_healthy
-      redis-test:
-        condition: service_healthy
+  

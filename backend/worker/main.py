@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -24,18 +25,20 @@ async def run_embedding_queue():
         repo = RAGRepository(session)
         tasks = await repo.get_pending_tasks(limit=20)
 
-        if not tasks:
-            return
+    if not tasks:
+        return
 
-        logger.info("Processing %d embedding tasks", len(tasks))
+    logger.info("Processing %d embedding tasks", len(tasks))
 
-        for task in tasks:
+    for task in tasks:
+        async with session_factory() as session:
+            repo = RAGRepository(session)
             await repo.mark_processing(task.id)
             await session.commit()
 
             try:
                 service = RAGService(session)
-                await service.embed_note_chunks(task.note_id)
+                await service.embed_note_chunks(task.note_id)  # type: ignore
                 await repo.mark_done(task.id)
                 await session.commit()
                 logger.info("Embedded note %s", task.note_id)
@@ -54,8 +57,8 @@ async def run_cleanup():
 
     from sqlalchemy import delete, select
 
-    from app.modules.auth.models import RefreshToken, User, VerificationToken
     from app.modules.ai.models import ChatSession
+    from app.modules.auth.models import RefreshToken, User, VerificationToken
     from app.modules.notes.models import Note
 
     now = datetime.now(UTC)
@@ -88,18 +91,16 @@ async def run_cleanup():
             )
 
         # 2. Purge expired refresh tokens
-        result = await session.execute(
-            delete(RefreshToken).where(RefreshToken.expires_at < now)
-        )
-        if result.rowcount:
-            logger.info("Purged %d expired refresh tokens", result.rowcount)
+        result = await session.execute(delete(RefreshToken).where(RefreshToken.expires_at < now))
+        if result.rowcount:  # type: ignore
+            logger.info("Purged %d expired refresh tokens", result.rowcount)  # type: ignore
 
         # 3. Purge expired verification tokens
         result = await session.execute(
             delete(VerificationToken).where(VerificationToken.expires_at < now)
         )
-        if result.rowcount:
-            logger.info("Purged %d expired verification tokens", result.rowcount)
+        if result.rowcount:  # type: ignore
+            logger.info("Purged %d expired verification tokens", result.rowcount)  # type: ignore
 
         # 4. Purge stale unconfirmed accounts
         unconfirmed_cutoff = now - timedelta(hours=settings.unconfirmed_account_ttl_hours)
@@ -109,16 +110,16 @@ async def run_cleanup():
                 User.created_at < unconfirmed_cutoff,
             )
         )
-        if result.rowcount:
-            logger.info("Purged %d stale unconfirmed accounts", result.rowcount)
+        if result.rowcount:  # type: ignore
+            logger.info("Purged %d stale unconfirmed accounts", result.rowcount)  # type: ignore
 
         # 5. Purge expired chat sessions
         session_cutoff = now - timedelta(days=settings.chat_session_ttl_days)
         result = await session.execute(
-            delete(ChatSession).where(ChatSession.updated_at < session_cutoff)
+            delete(ChatSession).where(ChatSession.updated_at < session_cutoff)  # type: ignore
         )
-        if result.rowcount:
-            logger.info("Purged %d expired chat sessions", result.rowcount)
+        if result.rowcount:  # type: ignore
+            logger.info("Purged %d expired chat sessions", result.rowcount)  # type: ignore
 
         await session.commit()
 
@@ -128,8 +129,7 @@ async def main():
 
     embedding_interval = settings.embedding_queue_interval_seconds
     cleanup_interval = settings.cleanup_interval_seconds
-    last_cleanup = 0.0
-    elapsed = 0.0
+    last_cleanup = time.monotonic()
 
     while True:
         try:
@@ -137,15 +137,15 @@ async def main():
         except Exception as e:
             logger.error("Embedding queue error: %s", e)
 
-        if elapsed - last_cleanup >= cleanup_interval:
+        now = time.monotonic()
+        if now - last_cleanup >= cleanup_interval:
             try:
                 await run_cleanup()
             except Exception as e:
                 logger.error("Cleanup error: %s", e)
-            last_cleanup = elapsed
+            last_cleanup = now
 
         await asyncio.sleep(embedding_interval)
-        elapsed += embedding_interval
 
 
 if __name__ == "__main__":
