@@ -5,27 +5,35 @@ from pydantic import BaseModel, Field
 
 
 class UserListItem(BaseModel):
-    id: uuid.UUID
-    email: str
-    nickname: str
-    role: str
-    is_email_confirmed: bool
-    is_active: bool
-    created_at: datetime
+    """User record visible to admins."""
+
+    id: uuid.UUID = Field(description="User ID")
+    email: str = Field(description="User email")
+    nickname: str = Field(description="Display name")
+    role: str = Field(description="Role: `user` or `admin`")
+    is_email_confirmed: bool = Field(description="Whether the email is confirmed")
+    is_active: bool = Field(description="Whether the account is active")
+    created_at: datetime = Field(description="Registration timestamp (UTC)")
 
     model_config = {"from_attributes": True}
 
 
 class UserListResponse(BaseModel):
-    items: list[UserListItem]
-    total: int
-    limit: int
-    offset: int
+    """Paginated list of users (admin view)."""
+
+    items: list[UserListItem] = Field(description="Users on this page")
+    total: int = Field(description="Total number of users")
+    limit: int = Field(description="Requested page size")
+    offset: int = Field(description="Requested offset")
 
 
 class SetActiveRequest(BaseModel):
-    is_active: bool
+    """Enable or disable a user account."""
+
+    is_active: bool = Field(description="`true` to activate, `false` to deactivate")
 
 
 class SetRoleRequest(BaseModel):
-    role: str = Field(pattern=r"^(user|admin)$")
+    """Change a user's role."""
+
+    role: str = Field(pattern=r"^(user|admin)$", description="New role: `user` or `admin`")
