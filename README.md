@@ -68,7 +68,7 @@ backend/src/app/modules/
 ### 1. Clone and configure
 
 ```bash
-git clone <repo-url> && cd Nocturn
+git clone https://github.com/CaseyJohnson-RS/nocturn && cd Nocturn
 cp .env.example .env
 ```
 
