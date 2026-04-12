@@ -47,12 +47,104 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await redis_client.aclose()
 
 
+APP_DESCRIPTION = """\
+**Nocturn** — AI-powered note-taking application with semantic search
+and an intelligent assistant that can create, edit, and organize your notes.
+
+## Core concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Note** | Markdown document with title, content, version counter, and tags. Supports soft-delete (trash) and restore. |
+| **Tag** | User-scoped label attached to notes for filtering and organization. |
+| **AI Session** | Chat conversation with the AI assistant. Each session holds an ordered list of messages. |
+| **Proposal** | An action the AI suggests (edit/create/delete a note, add/remove tags). The user can **apply** or **dismiss** each proposal. |
+| **Pending Confirmation** | A bulk operation (e.g. "add tag X to 10 notes") that requires explicit user confirmation before execution. |
+
+## Authentication
+
+All endpoints except `/api/auth/register`, `/api/auth/login`, and `/api/health`
+require a valid JWT access token in the `Authorization: Bearer <token>` header.
+
+- **Access token** — short-lived JWT returned by `POST /api/auth/login`.
+- **Refresh token** — long-lived, stored in an httponly cookie (`path=/api/auth`).
+  Use `POST /api/auth/refresh` to obtain a new access token.
+
+## AI streaming protocol
+
+`POST /api/ai/sessions/{id}/messages` returns an **SSE stream** (`text/event-stream`).
+
+Each SSE frame has the format:
+```
+event: <type>
+data: <json>
+```
+
+Event types:
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `ai:text_delta` | `{"delta": "..."}` | Incremental text chunk from the assistant |
+| `ai:proposal` | `{Proposal}` | Proposed note action |
+| `ai:pending_confirmation` | `{PendingConfirmation}` | Bulk operation awaiting user confirmation |
+| `ai:error` | `{"code": "...", "message": "..."}` | Error during generation |
+| `ai:done` | `{"message": {Message}}` | Stream complete with the final saved message |
+
+## Optimistic concurrency
+
+Note updates use version-based concurrency control.
+The client must send the current `version` — if it doesn't match the server's
+version, a `409 Conflict` is returned.
+
+## Semantic search (RAG)
+
+Notes are chunked and embedded asynchronously by a background worker.
+`POST /api/rag/search` performs cosine-similarity search over embeddings.
+Newly created/edited notes may take up to 30 seconds to become searchable.
+"""  # noqa: E501
+
 app = FastAPI(
     title="Nocturn",
+    summary="AI-powered note-taking API",
+    description=APP_DESCRIPTION,
     version="0.1.0",
     lifespan=lifespan,
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
+    openapi_tags=[
+        {
+            "name": "auth",
+            "description": "Registration, login, JWT tokens, email confirmation, password reset.",
+        },
+        {
+            "name": "profile",
+            "description": "Current user profile management — nickname, password, "
+            "account deletion.",
+        },
+        {
+            "name": "notes",
+            "description": "CRUD for markdown notes with tags, soft-delete/restore, "
+            "and batch operations.",
+        },
+        {
+            "name": "tags",
+            "description": "User-scoped tags for note organization and filtering.",
+        },
+        {
+            "name": "rag",
+            "description": "Semantic (vector) search over note embeddings.",
+        },
+        {
+            "name": "ai",
+            "description": "AI chat sessions, SSE message streaming, proposals, "
+            "and bulk confirmations.",
+        },
+        {
+            "name": "admin",
+            "description": "User management for administrators — list users, change roles, "
+            "enable/disable accounts.",
+        },
+    ],
 )
 
 app.add_middleware(RateLimitMiddleware)
@@ -73,6 +165,15 @@ app.include_router(ai_router)
 app.include_router(admin_router)
 
 
-@app.get("/api/health")
+@app.get(
+    "/api/health",
+    summary="Health check",
+    tags=["system"],
+)
 async def health_check():
+    """Returns `{"status": "ok"}` if the API server is running.
+
+    Does not check database or Redis connectivity — use this endpoint
+    only for basic liveness probes.
+    """
     return {"status": "ok"}
