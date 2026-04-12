@@ -3,23 +3,19 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from app.config import settings
-from app.common.database import Base
-
-# Import all models so Alembic can detect them
-from app.modules.auth.models import User, RefreshToken, VerificationToken  # noqa: F401
-from app.modules.notes.models import Note, NoteTag  # noqa: F401
-from app.modules.tags.models import Tag  # noqa: F401
-from app.modules.rag.models import NoteChunk, EmbeddingTask  # noqa: F401
-from app.modules.ai.models import ChatSession, ChatMessage  # noqa: F401
+from src.app.common import models  # type: ignore # noqa: F401
+from src.app.common.database.base import Base
+from src.app.config import settings
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
 
@@ -32,11 +28,12 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
+
     with context.begin_transaction():
         context.run_migrations()
 
 
-def do_run_migrations(connection):
+def do_run_migrations(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
@@ -48,8 +45,10 @@ async def run_async_migrations() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
+
     await connectable.dispose()
 
 

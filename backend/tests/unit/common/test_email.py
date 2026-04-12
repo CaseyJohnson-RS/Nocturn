@@ -4,13 +4,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.common.email import (
+from src.app.common.email import (
     init_email_service,
     send_confirmation_email,
     send_email,
     send_password_reset_email,
 )
-from app.config import settings
+from src.app.config import settings
 
 
 @pytest.fixture(autouse=True)
@@ -26,7 +26,7 @@ def email_settings(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture()
 def mock_resend():
-    with patch("app.common.email.resend.Emails.send") as mock_send:
+    with patch("src.app.common.email.resend.Emails.send") as mock_send:
         yield mock_send
 
 

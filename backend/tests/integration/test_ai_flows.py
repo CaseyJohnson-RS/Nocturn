@@ -1,5 +1,6 @@
 """Integration tests for AI assistant flows.
 
+
 Tests cover: session CRUD, message sending with mocked LLM, proposal lifecycle,
 bulk confirm/dismiss, cancel, streaming responses (SSE), and multi-user isolation.
 """
@@ -15,8 +16,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.routerai import ChatCompletionAccumulator
-from app.modules.auth.models import User
+from src.app.common.routerai import ChatCompletionAccumulator
+from src.app.modules.auth.models import User
 
 REGISTER = "/api/auth/register"
 LOGIN = "/api/auth/login"
@@ -37,7 +38,7 @@ async def _register_confirm_login(
     db: AsyncSession,
     user_data: dict[str, str] = USER,
 ) -> str:
-    with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+    with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
         await client.post(REGISTER, json=user_data)
 
     result = await db.execute(select(User).where(User.email == user_data["email"]))
@@ -68,7 +69,7 @@ async def _create_note(
     title: str = "Test Note",
     content: str = "Some content",
 ) -> dict[str, Any]:
-    with patch("app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
+    with patch("src.app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
         resp = await client.post(
             NOTES,
             json={"title": title, "content": content, "tag_ids": []},
@@ -273,7 +274,7 @@ class TestSendMessage:
         session = await _create_session(client, token)
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("Привет! Как дела?"),
         ):
             events = await _send_message_sse(client, token, session["id"])
@@ -292,7 +293,7 @@ class TestSendMessage:
         session = await _create_session(client, token)
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("Ответ"),
         ):
             await _send_message_sse(client, token, session["id"], content="Привет")
@@ -318,7 +319,7 @@ class TestSendMessage:
         session = await _create_session(client, token)
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("OK"),
         ):
             await _send_message_sse(
@@ -360,7 +361,7 @@ class TestSendMessage:
         note = await _create_note(client, token, title="Моя заметка")
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("Вот ваша заметка"),
         ):
             events = await _send_message_sse(
@@ -400,7 +401,7 @@ class TestMessagesPagination:
         # Send 3 messages
         for i in range(3):
             with patch(
-                "app.modules.ai.service.chat_completion_stream",
+                "src.app.modules.ai.service.chat_completion_stream",
                 side_effect=_fake_llm_stream(f"Ответ {i}"),
             ):
                 await _send_message_sse(
@@ -447,7 +448,7 @@ class TestProposalLifecycle:
         ]
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("Предлагаю изменить заголовок", tool_calls),
         ):
             events = await _send_message_sse(
@@ -501,7 +502,7 @@ class TestProposalLifecycle:
         ]
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("Удалить?", tool_calls),
         ):
             events = await _send_message_sse(
@@ -547,7 +548,7 @@ class TestProposalLifecycle:
         ]
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("OK", tool_calls),
         ):
             events = await _send_message_sse(
@@ -601,7 +602,7 @@ class TestPendingActionsBlock:
         ]
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("Proposal", tool_calls),
         ):
             await _send_message_sse(client, token, session["id"])
@@ -640,7 +641,7 @@ class TestBulkOperations:
         ]
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("Добавляю теги", tool_calls),
         ):
             events = await _send_message_sse(
@@ -748,7 +749,7 @@ class TestCreateWithDismiss:
         ]
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("Edit", tool_calls),
         ):
             await _send_message_sse(client, token, old_session["id"])
@@ -821,7 +822,7 @@ class TestIsolation:
         session = await _create_session(client, token1)
 
         with patch(
-            "app.modules.ai.service.chat_completion_stream",
+            "src.app.modules.ai.service.chat_completion_stream",
             side_effect=_fake_llm_stream("Secret"),
         ):
             await _send_message_sse(client, token1, session["id"])

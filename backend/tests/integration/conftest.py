@@ -8,8 +8,9 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.common.database import Base, get_db
-from app.common.redis import redis_client
+from src.app.common.database.base import Base
+from src.app.common.database.engine import get_db
+from src.app.common.redis import redis_client
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 
@@ -19,15 +20,15 @@ test_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
 
 @pytest.fixture(scope="session", autouse=True)
 async def setup_database():
-    from app.modules.ai.models import ChatMessage, ChatSession  # type: ignore # noqa: F401
-    from app.modules.auth.models import (  # type: ignore # noqa: F401 
+    from src.app.modules.ai.models import ChatMessage, ChatSession  # type: ignore # noqa: F401
+    from src.app.modules.auth.models import (  # type: ignore # noqa: F401 
         RefreshToken,  # type: ignore
         User,  # type: ignore
         VerificationToken,  # type: ignore
     )
-    from app.modules.notes.models import Note, NoteTag  # type: ignore # noqa: F401
-    from app.modules.rag.models import EmbeddingTask, NoteChunk  # type: ignore # noqa: F401
-    from app.modules.tags.models import Tag  # type: ignore # noqa: F401
+    from src.app.modules.notes.models import Note, NoteTag  # type: ignore # noqa: F401
+    from src.app.modules.rag.models import EmbeddingTask, NoteChunk  # type: ignore # noqa: F401
+    from src.app.modules.tags.models import Tag  # type: ignore # noqa: F401
 
     async with test_engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
@@ -65,7 +66,7 @@ async def client() -> AsyncGenerator[AsyncClient]:
                 await session.rollback()
                 raise
 
-    from app import main as main_module
+    from src.app import main as main_module
 
     @asynccontextmanager
     async def _test_lifespan(app: Any):

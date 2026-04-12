@@ -1,5 +1,6 @@
 """Unit tests for notes router."""
 
+
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
@@ -9,10 +10,10 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.common.exceptions import ConflictError, NotFoundError
-from app.middleware.auth import get_current_user
-from app.modules.notes.router import get_notes_service, router
-from app.modules.notes.schemas import (
+from src.app.common.exceptions import ConflictError, NotFoundError
+from src.app.middleware.auth import get_current_user
+from src.app.modules.notes.router import get_notes_service, router
+from src.app.modules.notes.schemas import (
     BatchNotesResponse,
     NoteListItem,
     NoteListResponse,

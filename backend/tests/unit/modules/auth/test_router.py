@@ -9,9 +9,9 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.common.exceptions import NotFoundError, UnauthorizedError, ValidationError
-from app.modules.auth.router import get_auth_service, router
-from app.modules.auth.schemas import TokenResponse
+from src.app.common.exceptions import NotFoundError, UnauthorizedError, ValidationError
+from src.app.modules.auth.router import get_auth_service, router
+from src.app.modules.auth.schemas import TokenResponse
 
 REFRESH_COOKIE = "refresh_token"
 
@@ -319,7 +319,7 @@ class TestGetMe:
         )
 
         # Override auth dependency to inject a fake user
-        from app.middleware.auth import get_current_user
+        from src.app.middleware.auth import get_current_user
 
         app.dependency_overrides[get_current_user] = lambda: MagicMock(
             id=user_id, role="user"

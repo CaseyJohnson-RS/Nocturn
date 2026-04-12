@@ -7,9 +7,9 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.auth.models import User
-from app.modules.rag.models import EmbeddingTask, NoteChunk
-from app.modules.rag.service import RAGService
+from src.app.modules.auth.models import User
+from src.app.modules.rag.models import EmbeddingTask, NoteChunk
+from src.app.modules.rag.service import RAGService
 
 REGISTER = "/api/auth/register"
 LOGIN = "/api/auth/login"
@@ -25,7 +25,7 @@ FAKE_EMBEDDING = [0.1] * 2560  # match settings.embedding_dimensions
 
 
 async def _register_confirm_login(client: AsyncClient, db: AsyncSession) -> str:
-    with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+    with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
         await client.post(REGISTER, json=USER)
 
     result = await db.execute(select(User).where(User.email == USER["email"]))
@@ -57,7 +57,7 @@ class TestIndexAndSearch:
     ) -> None:
         token = await _register_confirm_login(client, db)
 
-        with patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
             resp = await client.post(
                 NOTES,
                 json={
@@ -84,7 +84,7 @@ class TestIndexAndSearch:
         token = await _register_confirm_login(client, db)
 
         # Create note
-        with patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
             resp = await client.post(
                 NOTES,
                 json={
@@ -99,13 +99,13 @@ class TestIndexAndSearch:
         note_id = resp.json()["id"]
 
         # Simulate worker: embed the note
-        from app.modules.rag.service import RAGService
+        from src.app.modules.rag.service import RAGService
 
         result = await db.execute(select(User).where(User.email == USER["email"]))
         user: User = result.scalar_one()
 
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = _mock_embeddings(1)
@@ -121,7 +121,7 @@ class TestIndexAndSearch:
 
         # Search
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = [FAKE_EMBEDDING]
@@ -153,7 +153,7 @@ class TestRemoveFromIndex:
         token = await _register_confirm_login(client, db)
 
         # Create + embed
-        with patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
             resp = await client.post(
                 NOTES,
                 json={
@@ -170,7 +170,7 @@ class TestRemoveFromIndex:
         user: User = result.scalar_one()
 
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = _mock_embeddings(1)
@@ -180,7 +180,7 @@ class TestRemoveFromIndex:
             await db.commit()
 
         # Soft delete
-        with patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
             resp = await client.delete(f"{NOTES}/{note_id}", headers=_auth(token))
 
         assert resp.status_code == 204
@@ -203,7 +203,7 @@ class TestSearchEdgeCases:
         token = await _register_confirm_login(client, db)
 
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = [FAKE_EMBEDDING]
@@ -228,7 +228,7 @@ class TestSearchEdgeCases:
         # User 1 creates and embeds a note
         token1 = await _register_confirm_login(client, db)
 
-        with patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
             resp = await client.post(
                 NOTES,
                 json={
@@ -245,12 +245,12 @@ class TestSearchEdgeCases:
         user1: User = result.scalar_one()
 
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = _mock_embeddings(1)
 
-            from app.modules.rag.service import RAGService
+            from src.app.modules.rag.service import RAGService
 
             svc = RAGService(db)
             await svc.embed_note(note_id, user1.id)
@@ -258,7 +258,7 @@ class TestSearchEdgeCases:
 
         # Register user 2
         user2_data = {"email": "other@example.com", "password": "Valid1pass", "nickname": "other"}
-        with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+        with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
             await client.post(REGISTER, json=user2_data)
 
         result = await db.execute(select(User).where(User.email == user2_data["email"]))
@@ -277,7 +277,7 @@ class TestSearchEdgeCases:
 
         # User 2 searches — should not find user 1's note
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = [FAKE_EMBEDDING]

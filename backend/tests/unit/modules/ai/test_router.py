@@ -9,9 +9,9 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.middleware.auth import get_current_user
-from app.modules.ai.router import router
-from app.modules.ai.schemas import (
+from src.app.middleware.auth import get_current_user
+from src.app.modules.ai.router import router
+from src.app.modules.ai.schemas import (
     MessageResponse,
     MessagesListResponse,
     SessionListResponse,
@@ -73,7 +73,7 @@ def app(mock_service: AsyncMock, user_id: uuid.UUID) -> FastAPI:
 
     # Patch AIService so that any instantiation returns our mock
     patcher = patch(
-        "app.modules.ai.router.AIService", return_value=mock_service,
+        "src.app.modules.ai.router.AIService", return_value=mock_service,
     )
     patcher.start()
     test_app._ai_patcher = patcher  # type: ignore[attr-defined]

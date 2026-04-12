@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.common.exceptions import ConflictError, NotFoundError, ValidationError
-from app.modules.tags.service import TagsService, validate_tag_name
+from src.app.common.exceptions import ConflictError, NotFoundError, ValidationError
+from src.app.modules.tags.service import TagsService, validate_tag_name
 
 # --- _validate_tag_name ---
 

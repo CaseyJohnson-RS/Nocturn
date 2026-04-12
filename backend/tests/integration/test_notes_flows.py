@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.auth.models import User
+from src.app.modules.auth.models import User
 
 REGISTER = "/api/auth/register"
 LOGIN = "/api/auth/login"
@@ -28,7 +28,7 @@ async def _register_confirm_login(
     db: AsyncSession,
     user_data: dict[str, str] = USER,
 ) -> str:
-    with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+    with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
         await client.post(REGISTER, json=user_data)
 
     result = await db.execute(select(User).where(User.email == user_data["email"]))
@@ -57,7 +57,7 @@ async def _create_note(
     content: str = "Some content",
     tag_ids: list[str] | None = None,
 ) -> Any:
-    with patch("app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
+    with patch("src.app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
         resp = await client.post(
             NOTES,
             json={
@@ -127,7 +127,7 @@ class TestNotesCRUD:
         token = await _register_confirm_login(client, db)
         note = await _create_note(client, token)
 
-        with patch("app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
             resp = await client.put(
                 f"{NOTES}/{note['id']}",
                 json={
@@ -146,7 +146,7 @@ class TestNotesCRUD:
         token = await _register_confirm_login(client, db)
         note = await _create_note(client, token, title="Keep", content="Original")
 
-        with patch("app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
             resp = await client.put(
                 f"{NOTES}/{note['id']}",
                 json={
@@ -170,7 +170,7 @@ class TestVersionConflict:
         token = await _register_confirm_login(client, db)
         note = await _create_note(client, token)
 
-        with patch("app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
             await client.put(
                 f"{NOTES}/{note['id']}",
                 json={
@@ -202,12 +202,12 @@ class TestDeleteFlow:
         note = await _create_note(client, token)
 
         with (
-            patch("app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock),
+            patch("src.app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock),
             patch(
-                "app.modules.rag.service.RAGRepository.delete_chunks_for_note",
+                "src.app.modules.rag.service.RAGRepository.delete_chunks_for_note",
                 new_callable=AsyncMock,
             ),
-            patch("app.modules.rag.service.RAGRepository.remove_task", new_callable=AsyncMock),
+            patch("src.app.modules.rag.service.RAGRepository.remove_task", new_callable=AsyncMock),
         ):
             # Soft delete
             resp = await client.delete(f"{NOTES}/{note['id']}", headers=_auth(token))
@@ -236,12 +236,12 @@ class TestDeleteFlow:
         note = await _create_note(client, token)
 
         with (
-            patch("app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock),
+            patch("src.app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock),
             patch(
-                "app.modules.rag.service.RAGRepository.delete_chunks_for_note",
+                "src.app.modules.rag.service.RAGRepository.delete_chunks_for_note",
                 new_callable=AsyncMock,
             ),
-            patch("app.modules.rag.service.RAGRepository.remove_task", new_callable=AsyncMock),
+            patch("src.app.modules.rag.service.RAGRepository.remove_task", new_callable=AsyncMock),
         ):
             # Must soft delete first
             await client.delete(f"{NOTES}/{note['id']}", headers=_auth(token))
@@ -407,7 +407,7 @@ class TestIsolation:
 
         note = await _create_note(client, token1)
 
-        with patch("app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.RAGRepository.enqueue", new_callable=AsyncMock):
             resp = await client.put(
                 f"{NOTES}/{note['id']}",
                 json={

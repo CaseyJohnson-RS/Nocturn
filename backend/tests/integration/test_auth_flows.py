@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.auth.models import User, VerificationToken
+from src.app.modules.auth.models import User, VerificationToken
 
 PREFIX = "/api/auth/"
 
@@ -35,7 +35,7 @@ async def _get_verification_token(db: AsyncSession, token_type: str) -> Verifica
 
 async def _register_and_confirm(client: AsyncClient, db: AsyncSession) -> None:
     """Register a user and confirm their email."""
-    with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+    with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
         await client.post(REGISTER, json=VALID_USER)
 
     vt = await _get_verification_token(db, "email_confirm")
@@ -72,7 +72,7 @@ class TestRegistrationFlow:
     @pytest.mark.anyio()
     async def test_register_sends_confirmation(self, client: AsyncClient, db: AsyncSession) -> None:
         with patch(
-            "app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock
+            "src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock
         ) as mock_email:
             resp = await client.post(REGISTER, json=VALID_USER)
 
@@ -90,7 +90,7 @@ class TestRegistrationFlow:
 
     @pytest.mark.anyio()
     async def test_cannot_login_before_confirmation(self, client: AsyncClient) -> None:
-        with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+        with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
             await client.post(REGISTER, json=VALID_USER)
 
         resp = await client.post(
@@ -177,7 +177,7 @@ class TestPasswordResetFlow:
 
         # Request reset
         with patch(
-            "app.modules.auth.service.send_password_reset_email", new_callable=AsyncMock
+            "src.app.modules.auth.service.send_password_reset_email", new_callable=AsyncMock
         ) as mock_email:
             resp = await client.post(REQUEST_RESET, json={"email": VALID_USER["email"]})
 
@@ -223,7 +223,7 @@ class TestPasswordResetFlow:
         _, refresh = await _login(client)
 
         with patch(
-            "app.modules.auth.service.send_password_reset_email", new_callable=AsyncMock
+            "src.app.modules.auth.service.send_password_reset_email", new_callable=AsyncMock
         ) as mock_email:
             await client.post(REQUEST_RESET, json={"email": VALID_USER["email"]})
 

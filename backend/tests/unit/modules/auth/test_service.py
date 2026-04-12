@@ -7,9 +7,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from argon2 import PasswordHasher
 
-from app.common.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
-from app.config import settings
-from app.modules.auth.service import AuthService, validate_password
+from src.app.common.exceptions import (
+    ConflictError,
+    NotFoundError,
+    UnauthorizedError,
+    ValidationError,
+)
+from src.app.config import settings
+from src.app.modules.auth.service import AuthService, validate_password
 
 ph = PasswordHasher()
 
@@ -71,7 +76,7 @@ class TestValidatePassword:
 
 class TestRegister:
     @pytest.mark.anyio()
-    @patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock)
+    @patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock)
     async def test_register_new_user(
         self, mock_email: AsyncMock, service: AuthService, repo: AsyncMock
     ):
@@ -91,7 +96,7 @@ class TestRegister:
     ) -> None:
         repo.get_user_by_email.return_value = unconfirmed_user
 
-        with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+        with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
             await service.register("user@example.com", "Valid1pass", "newnick")
 
         repo.update_nickname.assert_called_once_with(unconfirmed_user.id, "newnick")
@@ -277,7 +282,7 @@ class TestLogout:
 
 class TestRequestPasswordReset:
     @pytest.mark.anyio()
-    @patch("app.modules.auth.service.send_password_reset_email", new_callable=AsyncMock)
+    @patch("src.app.modules.auth.service.send_password_reset_email", new_callable=AsyncMock)
     async def test_confirmed_user_sends_email(
         self, mock_email: AsyncMock, service: AuthService, repo: AsyncMock, active_user: MagicMock
     ):
@@ -290,7 +295,7 @@ class TestRequestPasswordReset:
         assert "reset" in result.lower()
 
     @pytest.mark.anyio()
-    @patch("app.modules.auth.service.send_password_reset_email", new_callable=AsyncMock)
+    @patch("src.app.modules.auth.service.send_password_reset_email", new_callable=AsyncMock)
     async def test_unknown_email_no_leak(
         self, mock_email: AsyncMock, service: AuthService, repo: AsyncMock
     ):
@@ -339,7 +344,7 @@ class TestResetPassword:
 
 class TestResendConfirmation:
     @pytest.mark.anyio()
-    @patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock)
+    @patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock)
     async def test_unconfirmed_user_sends(
         self,
         mock_email: AsyncMock,
@@ -354,7 +359,7 @@ class TestResendConfirmation:
         mock_email.assert_called_once()
 
     @pytest.mark.anyio()
-    @patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock)
+    @patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock)
     async def test_confirmed_user_no_send(
         self, mock_email: AsyncMock, service: AuthService, repo: AsyncMock, active_user: MagicMock
     ):
@@ -399,7 +404,7 @@ class TestJWT:
 
     def test_expired_token(self):
         user_id = uuid.uuid4()
-        with patch("app.modules.auth.service.settings") as mock_settings:
+        with patch("src.app.modules.auth.service.settings") as mock_settings:
             mock_settings.jwt_secret = settings.jwt_secret
             mock_settings.access_token_ttl_minutes = -1
             token = AuthService.create_access_token(user_id, "user")

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.modules.ai.tools import (
+from src.app.modules.ai.tools import (
     BATCH_TOOL_NAMES,
     EXECUTOR_TOOLS,
     PLANNER_TOOLS,
@@ -576,7 +576,7 @@ class TestProposeCreateNote:
 
     @pytest.mark.anyio()
     async def test_too_many_tags(self, executor: ToolExecutor) -> None:
-        with patch("app.modules.ai.tools.settings") as mock_s:
+        with patch("src.app.modules.ai.tools.settings") as mock_s:
             mock_s.max_tags_per_note = 10
             result = json.loads(
                 await executor.execute(
@@ -642,7 +642,7 @@ class TestProposeAddTags:
         note = _mock_note(tags=[_mock_tag(f"t{i}") for i in range(9)])
         executor.notes_repo.get_active_note.return_value = note  # type: ignore
 
-        with patch("app.modules.ai.tools.settings") as mock_s:
+        with patch("src.app.modules.ai.tools.settings") as mock_s:
             mock_s.max_tags_per_note = 10
             result = json.loads(
                 await executor.execute(
@@ -747,7 +747,7 @@ class TestBatchTools:
 
     @pytest.mark.anyio()
     async def test_too_many_notes(self, executor: ToolExecutor) -> None:
-        with patch("app.modules.ai.tools.settings") as mock_s:
+        with patch("src.app.modules.ai.tools.settings") as mock_s:
             mock_s.max_notes_in_bulk = 25
             ids = [str(uuid.uuid4()) for _ in range(30)]
             result = json.loads(
@@ -763,7 +763,7 @@ class TestBatchTools:
     async def test_no_valid_notes(self, executor: ToolExecutor) -> None:
         executor.notes_repo.get_active_notes_by_ids.return_value = []  # type: ignore
 
-        with patch("app.modules.ai.tools.settings") as mock_s:
+        with patch("src.app.modules.ai.tools.settings") as mock_s:
             mock_s.max_notes_in_bulk = 25
             result = json.loads(
                 await executor.execute(
@@ -785,7 +785,7 @@ class TestBatchTools:
             _mock_note(note_id=nid_valid),
         ]
 
-        with patch("app.modules.ai.tools.settings") as mock_s:
+        with patch("src.app.modules.ai.tools.settings") as mock_s:
             mock_s.max_notes_in_bulk = 25
             result = json.loads(
                 await executor.execute(
@@ -810,7 +810,7 @@ class TestBatchReplace:
             _mock_note(note_id=nid),
         ]
 
-        with patch("app.modules.ai.tools.settings") as mock_s:
+        with patch("src.app.modules.ai.tools.settings") as mock_s:
             mock_s.max_notes_in_bulk = 25
             result = json.loads(
                 await executor.execute(
@@ -852,7 +852,7 @@ class TestBatchTransform:
             _mock_note(note_id=nid),
         ]
 
-        with patch("app.modules.ai.tools.settings") as mock_s:
+        with patch("src.app.modules.ai.tools.settings") as mock_s:
             mock_s.max_notes_in_bulk = 25
             result = json.loads(
                 await executor.execute(
@@ -898,7 +898,7 @@ class TestGenerateDeterministicProposals:
             "params": {"tags": ["work"]},
         }
 
-        with patch("app.modules.ai.tools.NotesRepository") as mock_repo:
+        with patch("src.app.modules.ai.tools.NotesRepository") as mock_repo:
             mock_repo.return_value.get_active_note = AsyncMock(return_value=note)
             result = await generate_deterministic_proposals(
                 db, user_id, confirmation,
@@ -918,7 +918,7 @@ class TestGenerateDeterministicProposals:
             "params": {"tags": ["old"]},
         }
 
-        with patch("app.modules.ai.tools.NotesRepository") as mock_repo:
+        with patch("src.app.modules.ai.tools.NotesRepository") as mock_repo:
             mock_repo.return_value.get_active_note = AsyncMock(return_value=note)
             result = await generate_deterministic_proposals(
                 db, user_id, confirmation,
@@ -937,7 +937,7 @@ class TestGenerateDeterministicProposals:
             "params": {},
         }
 
-        with patch("app.modules.ai.tools.NotesRepository") as mock_repo:
+        with patch("src.app.modules.ai.tools.NotesRepository") as mock_repo:
             mock_repo.return_value.get_active_note = AsyncMock(return_value=note)
             result = await generate_deterministic_proposals(
                 db, user_id, confirmation,
@@ -962,7 +962,7 @@ class TestGenerateDeterministicProposals:
             },
         }
 
-        with patch("app.modules.ai.tools.NotesRepository") as mock_repo:
+        with patch("src.app.modules.ai.tools.NotesRepository") as mock_repo:
             mock_repo.return_value.get_active_note = AsyncMock(return_value=note)
             result = await generate_deterministic_proposals(
                 db, user_id, confirmation,
@@ -986,7 +986,7 @@ class TestGenerateDeterministicProposals:
             },
         }
 
-        with patch("app.modules.ai.tools.NotesRepository") as mock_repo:
+        with patch("src.app.modules.ai.tools.NotesRepository") as mock_repo:
             mock_repo.return_value.get_active_note = AsyncMock(return_value=note)
             result = await generate_deterministic_proposals(
                 db, user_id, confirmation,
@@ -1009,7 +1009,7 @@ class TestGenerateDeterministicProposals:
             },
         }
 
-        with patch("app.modules.ai.tools.NotesRepository") as mock_repo:
+        with patch("src.app.modules.ai.tools.NotesRepository") as mock_repo:
             mock_repo.return_value.get_active_note = AsyncMock(return_value=note)
             result = await generate_deterministic_proposals(
                 db, user_id, confirmation,
@@ -1036,7 +1036,7 @@ class TestGenerateDeterministicProposals:
             },
         }
 
-        with patch("app.modules.ai.tools.NotesRepository") as mock_repo:
+        with patch("src.app.modules.ai.tools.NotesRepository") as mock_repo:
             mock_repo.return_value.get_active_note = AsyncMock(return_value=note)
             result = await generate_deterministic_proposals(
                 db, user_id, confirmation,
@@ -1053,7 +1053,7 @@ class TestGenerateDeterministicProposals:
             "params": {},
         }
 
-        with patch("app.modules.ai.tools.NotesRepository") as mock_repo:
+        with patch("src.app.modules.ai.tools.NotesRepository") as mock_repo:
             mock_repo.return_value.get_active_note = AsyncMock()
             result = await generate_deterministic_proposals(
                 db, user_id, confirmation,
@@ -1069,7 +1069,7 @@ class TestGenerateDeterministicProposals:
             "params": {},
         }
 
-        with patch("app.modules.ai.tools.NotesRepository") as mock_repo:
+        with patch("src.app.modules.ai.tools.NotesRepository") as mock_repo:
             mock_repo.return_value.get_active_note = AsyncMock(return_value=None)
             result = await generate_deterministic_proposals(
                 db, user_id, confirmation,

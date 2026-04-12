@@ -1,5 +1,6 @@
 """Unit tests for AIService."""
 
+
 import asyncio
 import json
 import uuid
@@ -8,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.common.exceptions import ConflictError, NotFoundError, ValidationError
-from app.modules.ai.schemas import MessageResponse, SessionResponse
-from app.modules.ai.service import (
+from src.app.common.exceptions import ConflictError, NotFoundError, ValidationError
+from src.app.modules.ai.schemas import MessageResponse, SessionResponse
+from src.app.modules.ai.service import (
     AIService,
     _actions_summary_for_context,
     _clear_cancel,
@@ -106,13 +107,13 @@ def session_id() -> uuid.UUID:
 
 class TestEstimateTokens:
     def test_basic(self) -> None:
-        with patch("app.modules.ai.service.settings") as mock_settings:
+        with patch("src.app.modules.ai.service.settings") as mock_settings:
             mock_settings.planner_chars_per_token = 1.3
             result = _estimate_tokens("Hello world")
             assert result == int(len("Hello world") / 1.3)
 
     def test_empty(self) -> None:
-        with patch("app.modules.ai.service.settings") as mock_settings:
+        with patch("src.app.modules.ai.service.settings") as mock_settings:
             mock_settings.planner_chars_per_token = 1.3
             assert _estimate_tokens("") == 0
 
@@ -178,7 +179,7 @@ class TestActionsSummaryForContext:
 class TestGeneratingFlag:
     @pytest.mark.anyio()
     async def test_set_and_clear(self, session_id: uuid.UUID) -> None:
-        with patch("app.modules.ai.service.redis_client") as mock_redis:
+        with patch("src.app.modules.ai.service.redis_client") as mock_redis:
             mock_redis.set = AsyncMock(return_value=True)
             mock_redis.delete = AsyncMock()
 
@@ -190,7 +191,7 @@ class TestGeneratingFlag:
 
     @pytest.mark.anyio()
     async def test_set_returns_false_when_locked(self, session_id: uuid.UUID) -> None:
-        with patch("app.modules.ai.service.redis_client") as mock_redis:
+        with patch("src.app.modules.ai.service.redis_client") as mock_redis:
             mock_redis.set = AsyncMock(return_value=None)
             assert await _set_generating(session_id) is False
 
@@ -204,7 +205,7 @@ class TestCancelRedis:
     @pytest.mark.anyio()
     async def test_set_and_check(self) -> None:
         sid = uuid.uuid4()
-        with patch("app.modules.ai.service.redis_client") as mock_redis:
+        with patch("src.app.modules.ai.service.redis_client") as mock_redis:
             mock_redis.set = AsyncMock()
             mock_redis.exists = AsyncMock(return_value=1)
 
@@ -216,14 +217,14 @@ class TestCancelRedis:
     @pytest.mark.anyio()
     async def test_not_cancelled(self) -> None:
         sid = uuid.uuid4()
-        with patch("app.modules.ai.service.redis_client") as mock_redis:
+        with patch("src.app.modules.ai.service.redis_client") as mock_redis:
             mock_redis.exists = AsyncMock(return_value=0)
             assert await _is_cancelled(sid) is False
 
     @pytest.mark.anyio()
     async def test_clear_cancel(self) -> None:
         sid = uuid.uuid4()
-        with patch("app.modules.ai.service.redis_client") as mock_redis:
+        with patch("src.app.modules.ai.service.redis_client") as mock_redis:
             mock_redis.delete = AsyncMock()
             await _clear_cancel(sid)
             mock_redis.delete.assert_called_once()
@@ -259,7 +260,7 @@ class TestStreamWithFirstTokenTimeout:
 
     @pytest.mark.anyio()
     async def test_timeout_on_first_token(self) -> None:
-        from app.modules.ai.service import _LLMTimeoutError
+        from src.app.modules.ai.service import _LLMTimeoutError
 
         async def gen():
             await asyncio.sleep(100)
@@ -456,7 +457,7 @@ class TestPreValidateSend:
     ) -> None:
         repo.get_session.return_value = _mock_session(session_id=session_id)
 
-        with patch("app.modules.ai.service.settings") as mock_s:
+        with patch("src.app.modules.ai.service.settings") as mock_s:
             mock_s.max_message_length = 10
             result = await service.pre_validate_send(
                 user_id, session_id, "A" * 100,
@@ -487,7 +488,7 @@ class TestPreValidateSend:
         repo.get_session.return_value = _mock_session(session_id=session_id)
         repo.has_pending_actions.return_value = False
 
-        with patch("app.modules.ai.service.redis_client") as mock_redis:
+        with patch("src.app.modules.ai.service.redis_client") as mock_redis:
             await service.pre_validate_send(user_id, session_id, "Hi")
             mock_redis.set.assert_not_called()
 
@@ -503,7 +504,7 @@ class TestSendMessage:
         self, service: AIService, user_id: uuid.UUID, session_id: uuid.UUID,
     ) -> None:
         """If Redis lock is taken, yield error + done."""
-        with patch("app.modules.ai.service._set_generating", return_value=False):
+        with patch("src.app.modules.ai.service._set_generating", return_value=False):
             events = []
             async for chunk in service.send_message(
                 user_id, session_id, "Hello",
@@ -523,9 +524,9 @@ class TestSendMessage:
         repo.get_session.return_value = None
 
         with (
-            patch("app.modules.ai.service._set_generating", return_value=True),
-            patch("app.modules.ai.service._clear_generating", new_callable=AsyncMock),
-            patch("app.modules.ai.service._clear_cancel", new_callable=AsyncMock),
+            patch("src.app.modules.ai.service._set_generating", return_value=True),
+            patch("src.app.modules.ai.service._clear_generating", new_callable=AsyncMock),
+            patch("src.app.modules.ai.service._clear_cancel", new_callable=AsyncMock),
         ):
             events = []
             async for chunk in service.send_message(
@@ -545,13 +546,13 @@ class TestSendMessage:
         repo.get_session.return_value = None
 
         with (
-            patch("app.modules.ai.service._set_generating", return_value=True),
+            patch("src.app.modules.ai.service._set_generating", return_value=True),
             patch(
-                "app.modules.ai.service._clear_generating",
+                "src.app.modules.ai.service._clear_generating",
                 new_callable=AsyncMock,
             ) as mock_clear_gen,
             patch(
-                "app.modules.ai.service._clear_cancel",
+                "src.app.modules.ai.service._clear_cancel",
                 new_callable=AsyncMock,
             ) as mock_clear_cancel,
         ):
@@ -569,7 +570,7 @@ class TestSendMessage:
         user_id: uuid.UUID, session_id: uuid.UUID,
     ) -> None:
         """Bug 3: first-token timeout must yield ai:error with code llm_timeout."""
-        from app.modules.ai.service import _LLMTimeoutError
+        from src.app.modules.ai.service import _LLMTimeoutError
 
         session = _mock_session(session_id=session_id, user_id=user_id)
         session.title = "Existing"
@@ -582,13 +583,13 @@ class TestSendMessage:
             yield "never"
 
         with (
-            patch("app.modules.ai.service._set_generating", return_value=True),
-            patch("app.modules.ai.service._clear_generating", new_callable=AsyncMock),
-            patch("app.modules.ai.service._clear_cancel", new_callable=AsyncMock),
-            patch("app.modules.ai.service.chat_completion_stream", side_effect=fake_stream),
-            patch("app.modules.ai.service._stream_with_first_token_timeout") as mock_timeout,
-            patch("app.modules.ai.service._token_budget", return_value=10000),
-            patch("app.modules.ai.service._is_cancelled", return_value=False),
+            patch("src.app.modules.ai.service._set_generating", return_value=True),
+            patch("src.app.modules.ai.service._clear_generating", new_callable=AsyncMock),
+            patch("src.app.modules.ai.service._clear_cancel", new_callable=AsyncMock),
+            patch("src.app.modules.ai.service.chat_completion_stream", side_effect=fake_stream),
+            patch("src.app.modules.ai.service._stream_with_first_token_timeout") as mock_timeout,
+            patch("src.app.modules.ai.service._token_budget", return_value=10000),
+            patch("src.app.modules.ai.service._is_cancelled", return_value=False),
         ):
             # Simulate the timeout wrapper raising
             async def timeout_raises(*a, **kw):
@@ -620,7 +621,7 @@ class TestCancelGeneration:
     ) -> None:
         repo.get_session.return_value = _mock_session(session_id=session_id)
 
-        with patch("app.modules.ai.service.redis_client") as mock_redis:
+        with patch("src.app.modules.ai.service.redis_client") as mock_redis:
             # generating key exists
             mock_redis.exists = AsyncMock(return_value=True)
             mock_redis.set = AsyncMock()
@@ -646,7 +647,7 @@ class TestCancelGeneration:
     ) -> None:
         repo.get_session.return_value = _mock_session(session_id=session_id)
 
-        with patch("app.modules.ai.service.redis_client") as mock_redis:
+        with patch("src.app.modules.ai.service.redis_client") as mock_redis:
             # generating key does not exist
             mock_redis.exists = AsyncMock(return_value=False)
 
@@ -662,7 +663,7 @@ class TestCancelGeneration:
         The generator's finally block handles cleanup."""
         repo.get_session.return_value = _mock_session(session_id=session_id)
 
-        with patch("app.modules.ai.service.redis_client") as mock_redis:
+        with patch("src.app.modules.ai.service.redis_client") as mock_redis:
             mock_redis.exists = AsyncMock(return_value=True)
             mock_redis.set = AsyncMock()
             mock_redis.delete = AsyncMock()
@@ -926,7 +927,7 @@ class TestConfirmBulk:
     async def test_conflict_when_generating(
         self, service: AIService, user_id: uuid.UUID, session_id: uuid.UUID,
     ) -> None:
-        with patch("app.modules.ai.service._set_generating", return_value=False):
+        with patch("src.app.modules.ai.service._set_generating", return_value=False):
             events = []
             async for chunk in service.confirm_bulk(
                 user_id, session_id, "cid",
@@ -944,9 +945,9 @@ class TestConfirmBulk:
         repo.find_action_by_id.return_value = (None, None)
 
         with (
-            patch("app.modules.ai.service._set_generating", return_value=True),
-            patch("app.modules.ai.service._clear_generating", new_callable=AsyncMock),
-            patch("app.modules.ai.service._clear_cancel", new_callable=AsyncMock),
+            patch("src.app.modules.ai.service._set_generating", return_value=True),
+            patch("src.app.modules.ai.service._clear_generating", new_callable=AsyncMock),
+            patch("src.app.modules.ai.service._clear_cancel", new_callable=AsyncMock),
         ):
             events = []
             async for chunk in service.confirm_bulk(
@@ -964,13 +965,13 @@ class TestConfirmBulk:
         repo.find_action_by_id.return_value = (None, None)
 
         with (
-            patch("app.modules.ai.service._set_generating", return_value=True),
+            patch("src.app.modules.ai.service._set_generating", return_value=True),
             patch(
-                "app.modules.ai.service._clear_generating",
+                "src.app.modules.ai.service._clear_generating",
                 new_callable=AsyncMock,
             ) as mock_clear_gen,
             patch(
-                "app.modules.ai.service._clear_cancel",
+                "src.app.modules.ai.service._clear_cancel",
                 new_callable=AsyncMock,
             ) as mock_clear_cancel,
         ):

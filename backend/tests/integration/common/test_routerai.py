@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.common.routerai import (
+from src.app.common.routerai import (
     MODEL_CONTEXT_CACHE,
     ChatCompletionAccumulator,
     chat_completion_stream,
@@ -48,7 +48,7 @@ async def async_iter(items: list[MagicMock]):
 async def test_stream_simple_text():
     chunks = [make_chunk("Hello"), make_chunk(", "), make_chunk("world!")]
 
-    with patch("app.common.routerai.client") as mock_client:
+    with patch("src.app.common.routerai.client") as mock_client:
         mock_client.chat.completions.create = AsyncMock(return_value=async_iter(chunks))
 
         result: list[str] = []
@@ -62,7 +62,7 @@ async def test_stream_simple_text():
 async def test_stream_skips_empty_choices():
     chunks = [make_empty_chunk(), make_chunk("ok")]
 
-    with patch("app.common.routerai.client") as mock_client:
+    with patch("src.app.common.routerai.client") as mock_client:
         mock_client.chat.completions.create = AsyncMock(return_value=async_iter(chunks))
 
         result: list[str] = []
@@ -83,7 +83,7 @@ async def test_stream_with_accumulator_tool_calls():
 
     chunks = [make_chunk(content=None, tool_calls=[tc])]
 
-    with patch("app.common.routerai.client") as mock_client:
+    with patch("src.app.common.routerai.client") as mock_client:
         mock_client.chat.completions.create = AsyncMock(return_value=async_iter(chunks))
 
         acc = ChatCompletionAccumulator()
@@ -110,7 +110,7 @@ async def test_create_embeddings():
     resp = MagicMock()
     resp.data = [item]
 
-    with patch("app.common.routerai.client") as mock_client:
+    with patch("src.app.common.routerai.client") as mock_client:
         mock_client.embeddings.create = AsyncMock(return_value=resp)
         result = await create_embeddings(["test"])
 
@@ -130,7 +130,7 @@ async def test_get_model_context_length_found():
     resp = MagicMock()
     resp.data = [model_obj]
 
-    with patch("app.common.routerai.client") as mock_client:
+    with patch("src.app.common.routerai.client") as mock_client:
         mock_client.models.list = AsyncMock(return_value=resp)
         result = await get_model_context_length("gpt-4")
 
@@ -145,7 +145,7 @@ async def test_get_model_context_length_not_found():
     resp = MagicMock()
     resp.data = []
 
-    with patch("app.common.routerai.client") as mock_client:
+    with patch("src.app.common.routerai.client") as mock_client:
         mock_client.models.list = AsyncMock(return_value=resp)
         result = await get_model_context_length("unknown")
 

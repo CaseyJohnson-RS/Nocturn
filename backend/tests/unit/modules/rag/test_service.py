@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.common.exceptions import NotFoundError
-from app.modules.rag.service import RAGService, chunk_text, get_chunk_by_index
+from src.app.common.exceptions import NotFoundError
+from src.app.modules.rag.service import RAGService, chunk_text, get_chunk_by_index
 
 # --- chunk_text ---
 
@@ -28,7 +28,7 @@ class TestChunkText:
         chunks = chunk_text("hello", title=None)
         assert chunks[0] == "hello"
 
-    @patch("app.modules.rag.service.settings")
+    @patch("src.app.modules.rag.service.settings")
     def test_produces_overlapping_chunks(self, mock_settings: MagicMock) -> None:
         mock_settings.planner_chars_per_token = 1.0
         mock_settings.chunk_size_tokens = 10
@@ -50,7 +50,7 @@ class TestGetChunkByIndex:
         assert get_chunk_by_index("", 0) == ""
         assert get_chunk_by_index(None, 0) == ""
 
-    @patch("app.modules.rag.service.settings")
+    @patch("src.app.modules.rag.service.settings")
     def test_valid_index(self, mock_settings: MagicMock) -> None:
         mock_settings.planner_chars_per_token = 1.0
         mock_settings.chunk_size_tokens = 10
@@ -62,7 +62,7 @@ class TestGetChunkByIndex:
         # step = 7, so index 1 starts at 7
         assert result == text[7:17]
 
-    @patch("app.modules.rag.service.settings")
+    @patch("src.app.modules.rag.service.settings")
     def test_with_title(self, mock_settings: MagicMock) -> None:
         mock_settings.planner_chars_per_token = 1.0
         mock_settings.chunk_size_tokens = 10
@@ -71,7 +71,7 @@ class TestGetChunkByIndex:
         result = get_chunk_by_index("hello world", 0, title="Note")
         assert result.startswith("[Note] ")
 
-    @patch("app.modules.rag.service.settings")
+    @patch("src.app.modules.rag.service.settings")
     def test_out_of_range(self, mock_settings: MagicMock) -> None:
         mock_settings.planner_chars_per_token = 1.0
         mock_settings.chunk_size_tokens = 10
@@ -79,7 +79,7 @@ class TestGetChunkByIndex:
 
         assert get_chunk_by_index("short", 100) == ""
 
-    @patch("app.modules.rag.service.settings")
+    @patch("src.app.modules.rag.service.settings")
     def test_matches_chunk_text(self, mock_settings: MagicMock) -> None:
         mock_settings.planner_chars_per_token = 1.0
         mock_settings.chunk_size_tokens = 10
@@ -220,7 +220,7 @@ class TestEmbedNote:
         rag_repo.get_chunks_for_note.return_value = [chunk]
 
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = [[0.1, 0.2, 0.3]]
@@ -253,7 +253,7 @@ class TestEmbedNote:
         note_repo.get_note_by_id.return_value = note
         rag_repo.get_chunks_for_note.return_value = []
 
-        with patch("app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
+        with patch("src.app.modules.rag.service.create_embeddings", new_callable=AsyncMock):
             await service.embed_note(note.id, note.user_id)
 
         rag_repo.set_chunk_embeddings.assert_not_called()
@@ -277,7 +277,7 @@ class TestSearch:
         note_repo.get_notes_by_ids.return_value = [note]
 
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = [[0.1, 0.2]]
@@ -300,7 +300,7 @@ class TestSearch:
         note_repo.get_notes_by_ids.return_value = []  # note deleted
 
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = [[0.1]]
@@ -318,7 +318,7 @@ class TestSearch:
         rag_repo.search_similar.return_value = []
 
         with patch(
-            "app.modules.rag.service.create_embeddings",
+            "src.app.modules.rag.service.create_embeddings",
             new_callable=AsyncMock,
         ) as mock_embed:
             mock_embed.return_value = [[0.1]]

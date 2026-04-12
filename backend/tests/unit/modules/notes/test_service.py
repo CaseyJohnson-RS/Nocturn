@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.common.exceptions import ConflictError, NotFoundError, ValidationError
-from app.modules.notes.service import NotesService
+from src.app.common.exceptions import ConflictError, NotFoundError, ValidationError
+from src.app.modules.notes.service import NotesService
 
 # --- Helpers ---
 

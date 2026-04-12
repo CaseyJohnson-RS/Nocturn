@@ -9,10 +9,10 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.common.exceptions import ConflictError, UnauthorizedError, ValidationError
-from app.middleware.auth import get_current_user
-from app.modules.auth.schemas import UserResponse
-from app.modules.profile.router import get_profile_service, router
+from src.app.common.exceptions import ConflictError, UnauthorizedError, ValidationError
+from src.app.middleware.auth import get_current_user
+from src.app.modules.auth.schemas import UserResponse
+from src.app.modules.profile.router import get_profile_service, router
 
 NICKNAME = "/api/profile/nickname"
 PASSWORD = "/api/profile/password"

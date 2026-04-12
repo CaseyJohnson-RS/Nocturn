@@ -8,9 +8,9 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.middleware.auth import get_current_user
-from app.modules.rag.router import get_rag_service, router
-from app.modules.rag.schemas import SearchResponse, SearchResult
+from src.app.middleware.auth import get_current_user
+from src.app.modules.rag.router import get_rag_service, router
+from src.app.modules.rag.schemas import SearchResponse, SearchResult
 
 SEARCH = "/api/rag/search"
 

@@ -9,10 +9,10 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.common.exceptions import ConflictError, NotFoundError
-from app.middleware.auth import get_current_user
-from app.modules.tags.router import get_tags_service, router
-from app.modules.tags.schemas import TagListResponse, TagResponse
+from src.app.common.exceptions import ConflictError, NotFoundError
+from src.app.middleware.auth import get_current_user
+from src.app.modules.tags.router import get_tags_service, router
+from src.app.modules.tags.schemas import TagListResponse, TagResponse
 
 TAGS = "/api/tags"
 

@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.auth.models import User
+from src.app.modules.auth.models import User
 
 REGISTER = "/api/auth/register"
 LOGIN = "/api/auth/login"
@@ -26,7 +26,7 @@ async def _create_and_login(
     user_data: dict[str, str],
     role: str = "user",
 ) -> str:
-    with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+    with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
         await client.post(REGISTER, json=user_data)
 
     result = await db.execute(select(User).where(User.email == user_data["email"]))

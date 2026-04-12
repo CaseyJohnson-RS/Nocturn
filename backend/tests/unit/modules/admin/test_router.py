@@ -9,10 +9,10 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.common.exceptions import NotFoundError
-from app.middleware.auth import require_admin
-from app.modules.admin.router import get_admin_service, router
-from app.modules.admin.schemas import UserListItem, UserListResponse
+from src.app.common.exceptions import NotFoundError
+from src.app.middleware.auth import require_admin
+from src.app.modules.admin.router import get_admin_service, router
+from src.app.modules.admin.schemas import UserListItem, UserListResponse
 
 USERS = "/api/admin/users"
 

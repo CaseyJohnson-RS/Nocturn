@@ -22,12 +22,12 @@ VALID_USER = {"email": "user@example.com", "password": "Valid1pass", "nickname":
 
 async def _register_confirm_login(client: AsyncClient, db: AsyncGenerator[AsyncSession]) -> str:
     """Register, confirm via DB, login. Returns access token."""
-    with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+    with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
         await client.post(REGISTER, json=VALID_USER)
 
     from sqlalchemy import select
 
-    from app.modules.auth.models import User
+    from src.app.modules.auth.models import User
 
     user = (await db.execute(select(User).where(User.email == VALID_USER["email"]))).scalar_one()  # type: ignore
     user.is_email_confirmed = True
@@ -89,12 +89,12 @@ class TestNicknameFlow:
 
         # Register second user
         second = {"email": "other@example.com", "password": "Valid1pass", "nickname": "taken"}
-        with patch("app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
+        with patch("src.app.modules.auth.service.send_confirmation_email", new_callable=AsyncMock):
             await client.post(REGISTER, json=second)
 
         from sqlalchemy import select
 
-        from app.modules.auth.models import User
+        from src.app.modules.auth.models import User
 
         user2 = (await db.execute(select(User).where(User.email == second["email"]))).scalar_one()  # type: ignore
         user2.is_email_confirmed = True

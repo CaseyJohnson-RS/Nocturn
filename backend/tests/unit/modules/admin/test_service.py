@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.common.exceptions import ForbiddenError, NotFoundError
-from app.modules.admin.service import AdminService
+from src.app.common.exceptions import ForbiddenError, NotFoundError
+from src.app.modules.admin.service import AdminService
 
 
 def _mock_user(
