@@ -1,7 +1,7 @@
 # Assistant Interface Specification
 ## Nocturn
-**Версия:** 1.1
-**Дата:** 2026-03-28
+**Версия:** 1.2
+**Дата:** 2026-04-16
 **Автор:** Shamukhametov Ruslan
 
 ---
@@ -95,7 +95,19 @@ Planner ссылается на заметки непосредственно в
 
 ## 2. Хранение данных
 
-### 2.1 Схема chat_messages
+### 2.1 Схема chat_sessions
+
+Финальная структура таблицы `chat_sessions`:
+
+| Колонка | Тип | Ограничения | Описание |
+|---|---|---|---|
+| id | UUID | PK | |
+| user_id | UUID | FK → users, NOT NULL | |
+| title | VARCHAR(200) | nullable | Задаётся автоматически из первых 100 символов первого user-сообщения. До первого сообщения — `null` |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| last_message_at | TIMESTAMPTZ | nullable | Обновляется при каждом новом сообщении |
+
+### 2.2 Схема chat_messages
 
 Финальная структура таблицы `chat_messages`:
 
@@ -107,9 +119,10 @@ Planner ссылается на заметки непосредственно в
 | content | TEXT | NOT NULL | Текст сообщения. У assistant — с инлайн-ссылками `[[note:uuid\|Заголовок]]` |
 | actions | JSONB | | Массив proposals и pending_confirmations. Только для assistant |
 | attached_note_ids | UUID[] | | Без FK. ID прикреплённых заметок ([[CPS#5.3 AI-ассистент]]). Только для user |
+| token_estimate | INTEGER | NOT NULL, DEFAULT 0 | Приблизительное количество токенов сообщения. Используется при формировании токен-бюджета истории |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
 
-### 2.2 Структура proposal в actions
+### 2.3 Структура proposal в actions
 
 ```json
 {
@@ -127,7 +140,7 @@ Planner ссылается на заметки непосредственно в
 - Пока `status = pending`: поле `data` содержит полный snapshot (см. 2.3). `summary` отсутствует или null
 - После `status = applied | dismissed`: поле `data` удаляется (null). `summary` заполняется бэкендом по шаблону (см. 2.5)
 
-### 2.3 Поле data по типам proposal
+### 2.4 Поле data по типам proposal
 
 **`edit_note`:**
 ```json
@@ -154,7 +167,7 @@ Planner ссылается на заметки непосредственно в
 { "tags": ["тег1", "тег2"] }
 ```
 
-### 2.4 Структура pending_confirmation в actions
+### 2.5 Структура pending_confirmation в actions
 
 ```json
 {
@@ -172,7 +185,7 @@ Planner ссылается на заметки непосредственно в
 - Пока `status = pending`: `note_ids` и `params` хранятся полностью. `summary` отсутствует или null
 - После `status = confirmed | dismissed`: `note_ids` и `params` сохраняются для отображения истории. `summary` заполняется бэкендом
 
-### 2.5 Шаблоны summary
+### 2.6 Шаблоны summary
 
 Summary генерируется бэкендом детерминированно в момент изменения статуса. Не требует LLM.
 
@@ -188,8 +201,9 @@ Summary генерируется бэкендом детерминированн
 | `add_tags` dismissed | `"Отклонено добавление тегов к заметке «{title}»"` |
 | `remove_tags` applied | `"Удалены теги [{tags}] из заметки «{title}»"` |
 | `remove_tags` dismissed | `"Отклонено удаление тегов из заметки «{title}»"` |
-| pending_confirmation confirmed | `"{operation_type} для {N} заметок — подтверждено, {M} proposals сгенерировано"` |
-| pending_confirmation dismissed | `"{operation_type} для {N} заметок — отклонено"` |
+| pending_confirmation confirmed (через `build_summary`) | `"{op} для {N} заметок — подтверждено"` |
+| pending_confirmation confirmed (после bulk-выполнения) | `"{op} для {N} заметок — подтверждено, {M} proposals сгенерировано"` |
+| pending_confirmation dismissed | `"{op} для {N} заметок — отклонено"` |
 
 ---
 
@@ -505,10 +519,13 @@ Executor вызывается backend'ом для каждой заметки в
    - Генерирует proposals:
      - **Детерминированные** (`batch_add_tags`, `batch_remove_tags`, `batch_delete`, `batch_replace`): backend генерирует самостоятельно без LLM
      - **Недетерминированные** (`batch_transform`): backend вызывает Executor на каждую заметку
-   - По мере генерации добавляет proposals в `actions` нового сообщения и стримит клиенту через SSE
+   - По мере генерации стримит proposals клиенту через SSE
 4. SSE: `ai:proposal` события по мере генерации
-5. SSE: `ai:done`
-6. Backend обновляет `pending_confirmation.summary`
+5. После завершения backend сохраняет **новое assistant-сообщение**:
+   - `content`: `"Сгенерировано {N} proposals из bulk {op_type}."` (шаблон `bulk_proposals_generated`)
+   - `actions`: массив сгенерированных proposals (для отображения и apply/dismiss клиентом)
+6. Backend обновляет `pending_confirmation.summary` с `"{op} для {N} заметок — подтверждено, {M} proposals сгенерировано"`
+7. SSE: `ai:done`
 
 ### 6.3 Отклонение
 
@@ -570,9 +587,11 @@ content
 content + резюме actions (если есть)
 ```
 
-Поле `actions` **не передаётся целиком**. Backend заменяет его текстовым резюме:
-- Proposal: `"[propose_edit_note для заметки «Python» — applied]"`
-- Pending_confirmation: `"[batch_transform для 15 заметок — confirmed, 14 proposals сгенерировано]"`
+Поле `actions` **не передаётся целиком**. Backend заменяет его текстовым резюме по шаблонам из `locale.py`:
+
+- Proposal с summary (статус уже изменён): `"[{proposal_type} — {status}: {summary}]"` → например, `[edit_note — applied: Изменена заметка «Python»]`
+- Proposal без summary (статус `pending`): `"[{proposal_type} для заметки {note_id} — {status}]"` → например, `[edit_note для заметки a1b2c3... — pending]`
+- Pending confirmation: `"[{operation_type} для {N} заметок — {status}]"` → например, `[transform для 15 заметок — confirmed]`
 
 Полные snapshots (`data`) в контекст не передаются — это предотвращает переполнение контекста при наличии заметок до 20 000 символов.
 
@@ -645,6 +664,7 @@ content + резюме actions (если есть)
 |---|---|---|
 | POST | `/api/ai/sessions` | Создать сессию |
 | GET | `/api/ai/sessions` | Список сессий пользователя |
+| PUT | `/api/ai/sessions/{session_id}` | Переименовать сессию (`title`, 1–200 символов) |
 | DELETE | `/api/ai/sessions/{session_id}` | Удалить сессию |
 | GET | `/api/ai/sessions/{session_id}/messages` | История сообщений (пагинация) |
 
@@ -662,13 +682,18 @@ Request:
 
 `attached_note_ids` — опциональный массив UUID заметок (макс. 5, [[CPS#5.3 AI-ассистент]]). Бэкенд резолвит каждый UUID: проверяет существование, принадлежность пользователю, не soft-deleted. Невалидные UUID игнорируются без ошибки. Для валидных заметок бэкенд загружает заголовок и `content_preview` (первые 100 символов) и передаёт в контекст LLM (см. раздел 7.4).
 
-Response: пустой `200 OK`. Ответ ассистента доставляется через персистентный SSE-канал (`GET /api/events`).
+Response: `200 OK` с `Content-Type: text/event-stream`. Ответ ассистента доставляется непосредственно в теле этого же ответа через SSE.
 
-Ошибки:
+> **Важно:** клиент должен проверять заголовок `Content-Type` перед обработкой тела — при ошибках до начала стрима (400/404/409) возвращается обычный JSON, а не SSE.
+
+Ошибки (до начала стрима, JSON):
 - `400` — пустое сообщение, превышена длина, более 5 прикреплённых заметок
 - `404` — сессия не найдена / чужая
-- `409` — генерация уже в процессе или есть необработанные proposals / pending_confirmations
+- `409` — есть необработанные proposals / pending_confirmations (проверяется до старта стрима)
 - `429` — rate limit
+
+Ошибки (внутри стрима, SSE `ai:error`):
+- `conflict` — генерация уже в процессе (Redis lock занят)
 
 ### 9.3 Отмена активности ассистента
 
@@ -706,9 +731,9 @@ Request: `{ "status": "applied" | "dismissed" }`
 
 **POST confirm/{confirmation_id}:**
 
-Response: пустой `200 OK`. Proposals стримятся через персистентный SSE-канал.
+Response: `200 OK` с `Content-Type: text/event-stream`. Proposals стримятся непосредственно в теле ответа через SSE.
 
-Ошибки:
+Ошибки (до начала стрима, JSON):
 - `404` — сессия или confirmation не найдены
 - `409` — confirmation уже обработан
 
@@ -736,9 +761,9 @@ Response:
 
 ## 10. Поведение клиента и граничные случаи
 
-### 10.1 Обрыв SSE-соединения
+### 10.1 Обрыв SSE-соединения во время генерации
 
-При потере персистентного SSE-соединения клиент предлагает пользователю перезагрузить страницу. После перезагрузки клиент загружает историю сессии через `GET /messages` и восстанавливает интерфейс на основе сохранённых данных — `content` сообщений и `status` proposals.
+SSE-поток открывается на время одного запроса (`POST /messages` или `POST /confirm/{id}`) и закрывается после события `ai:done`. При обрыве соединения до получения `ai:done` клиент не получит финальное сообщение через SSE. После переподключения клиент загружает историю сессии через `GET /messages` и восстанавливает интерфейс на основе сохранённых данных — `content` сообщений и `status` proposals.
 
 ### 10.2 Создание нового чата при pending proposals
 
@@ -759,7 +784,11 @@ Response:
 
 ## 11. SSE-события
 
-Все AI-события доставляются через персистентный SSE-канал (`GET /api/events`), описанный в SAD раздел 8.7.
+AI-события доставляются через SSE-потоки двух эндпоинтов:
+- `POST /api/ai/sessions/{session_id}/messages` — события генерации Planner
+- `POST /api/ai/sessions/{session_id}/confirm/{confirmation_id}` — события выполнения bulk
+
+Каждый SSE-поток существует в рамках одного HTTP-запроса и завершается после `ai:done`.
 
 ### 11.1 Типы AI-событий
 
