@@ -11,6 +11,7 @@ from src.app.modules.notes.schemas import (
     CreateNoteRequest,
     NoteListResponse,
     NoteResponse,
+    NoteSearchResponse,
     UpdateNoteRequest,
     UpdateNoteTagsRequest,
 )
@@ -79,6 +80,31 @@ async def list_notes(
         parsed_tag_ids = [uuid.UUID(tid.strip()) for tid in tag_ids.split(",")]
 
     return await service.list(user.id, limit, offset, deleted, search, parsed_tag_ids)
+
+
+@router.get(
+    "/search",
+    response_model=NoteSearchResponse,
+    summary="Search notes by keywords",
+)
+async def search_notes(
+    user: AuthUser,
+    service: NotesServiceDep,
+    keywords: str = Query(
+        description="Comma-separated keywords (AND logic — note must match all of them)",
+        min_length=1,
+        max_length=500,
+    ),
+    limit: int = Query(default=50, ge=1, le=200, description="Max number of notes to return"),
+):
+    """Search active notes by keywords.
+
+    Pass one or more comma-separated keywords. A note is returned only when
+    **every** keyword appears in its title or content (case-insensitive).
+    Results are sorted by `updated_at` descending.
+    """
+    kw_list = [kw.strip() for kw in keywords.split(",") if kw.strip()]
+    return await service.search_keywords(user.id, kw_list, limit)
 
 
 @router.get(

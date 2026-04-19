@@ -107,6 +107,15 @@ class NoteListResponse(BaseModel):
     offset: int = Field(description="Requested offset")
 
 
+class NoteSearchResponse(BaseModel):
+    """Result of a keyword search over notes."""
+
+    items: list[NoteListItem] = Field(description="Matching notes")
+    total: int = Field(description="Total number of matching notes")
+    limit: int = Field(description="Applied result limit")
+    keywords: list[str] = Field(description="Keywords used in the search")
+
+
 class BatchNotesResponse(BaseModel):
     """Batch of full note objects."""
 

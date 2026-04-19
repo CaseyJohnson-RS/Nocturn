@@ -442,3 +442,194 @@ class TestUnauthorized:
     async def test_requires_auth(self, client: AsyncClient) -> None:
         resp = await client.get(NOTES)
         assert resp.status_code == 401
+
+
+# --- Keyword search ---
+
+
+class TestKeywordSearch:
+    @pytest.mark.anyio()
+    async def test_finds_note_by_title_keyword(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+    ) -> None:
+        token = await _register_confirm_login(client, db)
+        await _create_note(client, token, title="Python Tutorial", content="Learn programming")
+        await _create_note(client, token, title="Django Guide", content="Web framework")
+
+        resp = await client.get(
+            f"{NOTES}/search",
+            params={"keywords": "Python"},
+            headers=_auth(token),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 1
+        assert resp.json()["items"][0]["title"] == "Python Tutorial"
+
+    @pytest.mark.anyio()
+    async def test_finds_note_by_content_keyword(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+    ) -> None:
+        token = await _register_confirm_login(client, db)
+        await _create_note(client, token, title="Generic Title", content="unique_kw_xyz inside")
+        await _create_note(client, token, title="Another Note", content="no match here")
+
+        resp = await client.get(
+            f"{NOTES}/search",
+            params={"keywords": "unique_kw_xyz"},
+            headers=_auth(token),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 1
+
+    @pytest.mark.anyio()
+    async def test_multiple_keywords_and_logic(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+    ) -> None:
+        token = await _register_confirm_login(client, db)
+        # matches both keywords
+        await _create_note(client, token, title="Python Note", content="async programming")
+        # matches only one
+        await _create_note(client, token, title="Python Note", content="sync programming")
+
+        resp = await client.get(
+            f"{NOTES}/search",
+            params={"keywords": "Python,async"},
+            headers=_auth(token),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 1
+
+    @pytest.mark.anyio()
+    async def test_search_is_case_insensitive(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+    ) -> None:
+        token = await _register_confirm_login(client, db)
+        await _create_note(client, token, title="Python Guide", content="Learn Python")
+
+        resp = await client.get(
+            f"{NOTES}/search",
+            params={"keywords": "python"},
+            headers=_auth(token),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 1
+
+    @pytest.mark.anyio()
+    async def test_no_match_returns_empty(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+    ) -> None:
+        token = await _register_confirm_login(client, db)
+        await _create_note(client, token, title="Some note", content="Some content")
+
+        resp = await client.get(
+            f"{NOTES}/search",
+            params={"keywords": "zzz_no_match_zzz"},
+            headers=_auth(token),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 0
+        assert resp.json()["items"] == []
+
+    @pytest.mark.anyio()
+    async def test_limit_restricts_items_but_not_total(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+    ) -> None:
+        token = await _register_confirm_login(client, db)
+        for i in range(5):
+            await _create_note(client, token, title=f"Note {i}", content="common_kw_match")
+
+        resp = await client.get(
+            f"{NOTES}/search",
+            params={"keywords": "common_kw_match", "limit": 2},
+            headers=_auth(token),
+        )
+
+        assert resp.status_code == 200
+        assert len(resp.json()["items"]) == 2
+        assert resp.json()["total"] == 5
+
+    @pytest.mark.anyio()
+    async def test_deleted_notes_excluded(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+    ) -> None:
+        token = await _register_confirm_login(client, db)
+        note = await _create_note(client, token, title="Target Note", content="searchable_kw")
+
+        with (
+            patch(
+                "src.app.modules.rag.service.RAGRepository.delete_chunks_for_note",
+                new_callable=AsyncMock,
+            ),
+            patch("src.app.modules.rag.service.RAGRepository.remove_task", new_callable=AsyncMock),
+        ):
+            await client.delete(f"{NOTES}/{note['id']}", headers=_auth(token))
+
+        resp = await client.get(
+            f"{NOTES}/search",
+            params={"keywords": "searchable_kw"},
+            headers=_auth(token),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 0
+
+    @pytest.mark.anyio()
+    async def test_user_isolation(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+    ) -> None:
+        token1 = await _register_confirm_login(client, db, USER)
+        token2 = await _register_confirm_login(client, db, USER2)
+
+        await _create_note(client, token1, title="Private Note", content="secret_kw_value")
+
+        resp = await client.get(
+            f"{NOTES}/search",
+            params={"keywords": "secret_kw_value"},
+            headers=_auth(token2),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 0
+
+    @pytest.mark.anyio()
+    async def test_keywords_echoed_in_response(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+    ) -> None:
+        token = await _register_confirm_login(client, db)
+
+        resp = await client.get(
+            f"{NOTES}/search",
+            params={"keywords": "python,async"},
+            headers=_auth(token),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["keywords"] == ["python", "async"]
+
+    @pytest.mark.anyio()
+    async def test_requires_auth(self, client: AsyncClient) -> None:
+        resp = await client.get(f"{NOTES}/search", params={"keywords": "test"})
+        assert resp.status_code == 401

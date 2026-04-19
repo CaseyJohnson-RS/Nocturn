@@ -18,6 +18,7 @@ from src.app.modules.notes.schemas import (
     NoteListItem,
     NoteListResponse,
     NoteResponse,
+    NoteSearchResponse,
     TagBrief,
 )
 
@@ -452,6 +453,105 @@ class TestBatchGetNotes:
         assert resp.json()["items"] == []
 
 
+# --- GET /search ---
+
+
+class TestSearchNotes:
+    @pytest.mark.anyio()
+    async def test_success(
+        self,
+        client: AsyncClient,
+        mock_service: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        mock_service.search_keywords.return_value = NoteSearchResponse(
+            items=[
+                NoteListItem(
+                    id=uuid.uuid4(),
+                    title="Python Guide",
+                    updated_at=datetime.now(UTC),
+                    deleted_at=None,
+                )
+            ],
+            total=1,
+            limit=50,
+            keywords=["python"],
+        )
+
+        resp = await client.get(f"{NOTES}/search", params={"keywords": "python"})
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 1
+        assert resp.json()["keywords"] == ["python"]
+        mock_service.search_keywords.assert_called_once_with(user_id, ["python"], 50)
+
+    @pytest.mark.anyio()
+    async def test_multiple_keywords_parsed(
+        self,
+        client: AsyncClient,
+        mock_service: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        mock_service.search_keywords.return_value = NoteSearchResponse(
+            items=[], total=0, limit=50, keywords=["python", "async"]
+        )
+
+        resp = await client.get(f"{NOTES}/search", params={"keywords": "python,async"})
+
+        assert resp.status_code == 200
+        mock_service.search_keywords.assert_called_once_with(user_id, ["python", "async"], 50)
+
+    @pytest.mark.anyio()
+    async def test_keywords_whitespace_stripped(
+        self,
+        client: AsyncClient,
+        mock_service: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        mock_service.search_keywords.return_value = NoteSearchResponse(
+            items=[], total=0, limit=50, keywords=["python", "async"]
+        )
+
+        resp = await client.get(f"{NOTES}/search", params={"keywords": " python , async "})
+
+        assert resp.status_code == 200
+        mock_service.search_keywords.assert_called_once_with(user_id, ["python", "async"], 50)
+
+    @pytest.mark.anyio()
+    async def test_custom_limit(
+        self,
+        client: AsyncClient,
+        mock_service: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        mock_service.search_keywords.return_value = NoteSearchResponse(
+            items=[], total=0, limit=10, keywords=["test"]
+        )
+
+        resp = await client.get(f"{NOTES}/search", params={"keywords": "test", "limit": 10})
+
+        assert resp.status_code == 200
+        mock_service.search_keywords.assert_called_once_with(user_id, ["test"], 10)
+
+    @pytest.mark.anyio()
+    async def test_limit_too_high(self, client: AsyncClient) -> None:
+        resp = await client.get(f"{NOTES}/search", params={"keywords": "test", "limit": 300})
+
+        assert resp.status_code == 422
+
+    @pytest.mark.anyio()
+    async def test_limit_too_low(self, client: AsyncClient) -> None:
+        resp = await client.get(f"{NOTES}/search", params={"keywords": "test", "limit": 0})
+
+        assert resp.status_code == 422
+
+    @pytest.mark.anyio()
+    async def test_keywords_missing(self, client: AsyncClient) -> None:
+        resp = await client.get(f"{NOTES}/search")
+
+        assert resp.status_code == 422
+
+
 # --- Auth ---
 
 
@@ -465,6 +565,7 @@ class TestUnauthorized:
             for method, url in [
                 ("POST", NOTES),
                 ("GET", NOTES),
+                ("GET", f"{NOTES}/search?keywords=test"),
                 ("GET", f"{NOTES}/{note_id}"),
                 ("PUT", f"{NOTES}/{note_id}"),
                 ("DELETE", f"{NOTES}/{note_id}"),

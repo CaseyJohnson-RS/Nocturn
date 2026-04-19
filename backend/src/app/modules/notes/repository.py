@@ -164,6 +164,32 @@ class NotesRepository:
         )
         return result.scalar_one()
 
+    async def search_by_keywords(
+        self,
+        user_id: uuid.UUID,
+        keywords: list[str],
+        limit: int = 50,
+    ) -> tuple[list[Note], int]:
+        base_condition = (Note.user_id == user_id, Note.deleted_at.is_(None))
+        query = select(Note).options(selectinload(Note.tags)).where(*base_condition)
+        count_query = select(func.count(Note.id)).where(*base_condition)
+
+        for keyword in keywords:
+            pattern = f"%{keyword}%"
+            kw_filter = Note.title.ilike(pattern) | Note.content.ilike(pattern)
+            query = query.where(kw_filter)
+            count_query = count_query.where(kw_filter)
+
+        query = query.order_by(Note.updated_at.desc()).limit(limit)
+
+        result = await self.db.execute(query)
+        notes = list(result.scalars().all())
+
+        count_result = await self.db.execute(count_query)
+        total = count_result.scalar_one()
+
+        return notes, total
+
     async def get_notes_by_ids(
         self, note_ids: list[uuid.UUID], user_id: uuid.UUID
     ) -> list[Note]:

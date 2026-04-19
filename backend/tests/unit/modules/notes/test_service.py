@@ -549,3 +549,90 @@ class TestBatchGet:
         result = await service.batch_get(user_id, [])
 
         assert result.items == []
+
+
+# --- search_keywords ---
+
+
+class TestSearchKeywords:
+    @pytest.mark.anyio()
+    async def test_returns_matching_notes(
+        self,
+        service: NotesService,
+        repo: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        notes = [_mock_note(user_id=user_id, title="Python Guide")]
+        repo.search_by_keywords.return_value = (notes, 1)
+
+        result = await service.search_keywords(user_id, ["python"], limit=50)
+
+        assert result.total == 1
+        assert len(result.items) == 1
+        assert result.keywords == ["python"]
+
+    @pytest.mark.anyio()
+    async def test_empty_result(
+        self,
+        service: NotesService,
+        repo: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        repo.search_by_keywords.return_value = ([], 0)
+
+        result = await service.search_keywords(user_id, ["nonexistent"], limit=50)
+
+        assert result.total == 0
+        assert result.items == []
+
+    @pytest.mark.anyio()
+    async def test_passes_keywords_and_limit_to_repo(
+        self,
+        service: NotesService,
+        repo: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        repo.search_by_keywords.return_value = ([], 0)
+
+        await service.search_keywords(user_id, ["python", "async"], limit=20)
+
+        repo.search_by_keywords.assert_called_once_with(user_id, ["python", "async"], 20)
+
+    @pytest.mark.anyio()
+    async def test_strips_whitespace_from_keywords(
+        self,
+        service: NotesService,
+        repo: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        repo.search_by_keywords.return_value = ([], 0)
+
+        await service.search_keywords(user_id, ["  python  ", " async "], limit=50)
+
+        repo.search_by_keywords.assert_called_once_with(user_id, ["python", "async"], 50)
+
+    @pytest.mark.anyio()
+    async def test_filters_empty_keywords(
+        self,
+        service: NotesService,
+        repo: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        repo.search_by_keywords.return_value = ([], 0)
+
+        await service.search_keywords(user_id, ["", "  ", "python"], limit=50)
+
+        repo.search_by_keywords.assert_called_once_with(user_id, ["python"], 50)
+
+    @pytest.mark.anyio()
+    async def test_response_echoes_limit(
+        self,
+        service: NotesService,
+        repo: AsyncMock,
+        user_id: uuid.UUID,
+    ) -> None:
+        repo.search_by_keywords.return_value = ([], 0)
+
+        result = await service.search_keywords(user_id, ["test"], limit=25)
+
+        assert result.limit == 25

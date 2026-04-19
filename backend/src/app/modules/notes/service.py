@@ -16,6 +16,7 @@ from src.app.modules.notes.schemas import (
     NoteListItem,
     NoteListResponse,
     NoteResponse,
+    NoteSearchResponse,
     TagBrief,
 )
 from src.app.modules.rag.service import RAGService
@@ -194,6 +195,21 @@ class NotesService:
             raise RuntimeError("Failed to retrieve newly created note")
 
         return self._note_to_response(note)
+
+    async def search_keywords(
+        self,
+        user_id: uuid.UUID,
+        keywords: list[str],
+        limit: int = 50,
+    ) -> NoteSearchResponse:
+        clean_keywords = [kw.strip() for kw in keywords if kw.strip()]
+        notes, total = await self.repo.search_by_keywords(user_id, clean_keywords, limit)
+        return NoteSearchResponse(
+            items=[NoteListItem.model_validate(n) for n in notes],
+            total=total,
+            limit=limit,
+            keywords=clean_keywords,
+        )
 
     async def batch_get(
         self,
