@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Nocturn — Теги</title>
+  <style>
+    :root {
+      --bg-base:#1e1e1e; --bg-sidebar:#252526; --bg-tab:#2d2d2d;
+      --bg-input:#3c3c3c; --bg-hover:#2a2d2e; --bg-selected:#094771;
+      --bg-card:#252526; --bg-overlay:rgba(0,0,0,.5);
+      --fg:#cccccc; --fg-muted:#858585; --fg-disabled:#555;
+      --fg-link:#4daafc;
+      --border:#454545; --border-focus:#007acc;
+      --accent:#007acc; --accent-h:#1a8fd1;
+      --danger:#f44747; --success:#4ec9b0; --warning:#cca700;
+      --font:'Inter',system-ui,sans-serif; --mono:'JetBrains Mono','Fira Code',monospace;
+      --sidebar:48px; --chat:400px; --tabbar:35px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font);font-size:13px;color:var(--fg);background:var(--bg-base);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+    ::-webkit-scrollbar{width:6px;} ::-webkit-scrollbar-thumb{background:#424242;border-radius:3px;}
+    .shell{display:flex;flex:1;overflow:hidden;}
+
+    /* SIDEBAR */
+    .sidebar{width:var(--sidebar);background:var(--bg-sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;flex-shrink:0;}
+    .sidebar-top{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;}
+    .sidebar-bot{display:flex;flex-direction:column;align-items:center;gap:2px;}
+    .logo{width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700;font-size:18px;margin-bottom:6px;}
+    .nav-icon{position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--fg-muted);cursor:pointer;}
+    .nav-icon:hover{background:var(--bg-hover);color:var(--fg);}
+    .nav-icon.active{color:var(--accent);}
+    .nav-icon.active::before{content:'';position:absolute;left:-8px;top:50%;transform:translateY(-50%);width:2px;height:20px;background:var(--accent);border-radius:0 2px 2px 0;}
+    .divider{width:24px;height:1px;background:var(--border);margin:4px 0;}
+    .badge{position:absolute;top:4px;right:4px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
+    .avatar{width:24px;height:24px;border-radius:50%;background:#4a4a8a;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;}
+    svg.ic{display:block;}
+
+    /* MAIN */
+    .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+    .tabbar{height:var(--tabbar);background:var(--bg-tab);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;flex-shrink:0;overflow:hidden;}
+    .tab{height:100%;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:12px;color:var(--fg-muted);background:var(--bg-tab);border-right:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;}
+    .tab.active{background:var(--bg-base);color:var(--fg);border-top:1px solid var(--accent);}
+    .tab-close{width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:3px;font-size:14px;color:var(--fg-muted);opacity:0;}
+    .tab:hover .tab-close,.tab.active .tab-close{opacity:1;}
+    .view{display:none;flex:1;flex-direction:column;overflow:hidden;}
+    .view.active{display:flex;}
+
+    /* BUTTONS */
+    .btn{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:var(--font);}
+    .btn-primary{background:var(--accent);color:#fff;}
+    .btn-ghost{background:transparent;color:var(--fg);border:1px solid var(--border);}
+    .btn-danger{background:var(--danger);color:#fff;}
+    .btn-icon{background:transparent;color:var(--fg-muted);border:none;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;}
+    .btn-icon:hover{background:var(--bg-hover);color:var(--fg);}
+    .btn-icon.danger:hover{color:var(--danger);}
+    .btn-sm{padding:3px 8px;font-size:11px;}
+
+    /* CREATE FORM */
+    .create-form{padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .create-row{display:flex;gap:8px;align-items:flex-start;}
+    .tag-input{flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--fg);font-size:13px;font-family:var(--font);outline:none;}
+    .tag-input:focus{border-color:var(--border-focus);}
+    .tag-input.error{border-color:var(--danger);}
+    .field-error{font-size:11px;color:var(--danger);margin-top:5px;}
+
+    /* TAG LIST */
+    .tag-list-scroll{flex:1;overflow-y:auto;}
+    .tag-list-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);}
+    .list-label{font-size:11px;font-weight:600;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.05em;}
+    .tag-row{display:flex;align-items:center;padding:0 16px;height:44px;border-bottom:1px solid var(--border);gap:10px;position:relative;}
+    .tag-row:hover{background:var(--bg-hover);}
+    .tag-hash{color:var(--fg-muted);font-size:13px;}
+    .tag-name{flex:1;font-size:13px;font-weight:500;}
+    .tag-count{font-size:12px;color:var(--fg-muted);min-width:80px;}
+    .tag-actions{display:flex;gap:2px;opacity:0;}
+    .tag-row:hover .tag-actions{opacity:1;}
+
+    /* INLINE RENAME */
+    .tag-rename-row{display:flex;align-items:center;padding:0 16px;height:44px;border-bottom:1px solid var(--border);gap:10px;background:var(--bg-hover);}
+    .rename-input{flex:1;background:var(--bg-input);border:1px solid var(--border-focus);border-radius:4px;padding:5px 8px;color:var(--fg);font-size:13px;font-family:var(--font);outline:none;}
+    .rename-hint{font-size:11px;color:var(--fg-muted);white-space:nowrap;}
+
+    /* EMPTY / SKELETON */
+    .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--fg-muted);font-size:13px;padding:40px;}
+    .empty-icon{color:var(--fg-disabled);}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .skel{background:var(--bg-hover);border-radius:4px;animation:pulse 1.5s infinite;}
+    .skel-row{height:44px;border-radius:0;margin-bottom:0;border-bottom:1px solid var(--border);}
+
+    /* OVERLAY / DIALOG */
+    .overlay{position:fixed;inset:0;background:var(--bg-overlay);display:flex;align-items:center;justify-content:center;z-index:100;}
+    .overlay.hidden{display:none;}
+    .dialog{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:24px;width:440px;display:flex;flex-direction:column;gap:16px;}
+    .dialog-title{font-size:16px;font-weight:600;}
+    .dialog-body{font-size:13px;color:var(--fg-muted);line-height:1.5;}
+    .dialog-footer{display:flex;justify-content:flex-end;gap:8px;}
+
+    /* CHAT */
+    .chat{width:var(--chat);background:var(--bg-base);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+    .chat.hidden{display:none;}
+    .chat-header{height:var(--tabbar);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--bg-tab);flex-shrink:0;}
+    .chat-title{font-size:12px;font-weight:500;color:var(--fg-muted);}
+    .chat-empty-msg{flex:1;display:flex;align-items:center;justify-content:center;color:var(--fg-muted);font-size:13px;}
+    .chat-input{border-top:1px solid var(--border);padding:12px;flex-shrink:0;}
+    .input-wrap{display:flex;align-items:flex-end;gap:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:7px 10px;}
+    .chat-ta{flex:1;background:transparent;border:none;outline:none;color:var(--fg);font-size:13px;font-family:var(--font);resize:none;min-height:20px;}
+    .chat-ta::placeholder{color:var(--fg-muted);}
+    .send-btn{width:28px;height:28px;background:var(--accent);border:none;border-radius:4px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+    /* PROTOTYPE HELPER */
+    .view-switcher{position:fixed;bottom:12px;left:60px;z-index:50;display:flex;gap:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:4px;}
+    .vs-btn{padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;border:none;font-family:var(--font);background:transparent;color:var(--fg-muted);}
+    .vs-btn.on{background:var(--accent);color:#fff;}
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ══ SIDEBAR ══ -->
+  <nav class="sidebar">
+    <div class="sidebar-top">
+      <div class="logo">N</div>
+
+      <div class="nav-icon" title="Все заметки" onclick="location.href='app.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+
+      <div class="nav-icon" title="Поиск" onclick="location.href='search.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      </div>
+
+      <div class="nav-icon active" title="Теги">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+          <line x1="7" y1="7" x2="7.01" y2="7"/>
+        </svg>
+      </div>
+
+      <div class="nav-icon" title="AI-чат" onclick="toggleChat()">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span class="badge">2</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="nav-icon" title="Корзина" onclick="location.href='trash.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="sidebar-bot">
+      <div class="divider"></div>
+      <div class="nav-icon" title="Администрирование" onclick="location.href='admin.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div class="nav-icon" title="Сменить тему">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      </div>
+      <div class="nav-icon" title="Профиль"><div class="avatar">R</div></div>
+    </div>
+  </nav>
+
+  <!-- ══ MAIN ══ -->
+  <div class="main">
+
+    <!-- TAB BAR -->
+    <div class="tabbar">
+      <div class="tab" onclick="location.href='app.html'">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+        Все заметки
+        <span class="tab-close">×</span>
+      </div>
+      <div class="tab active">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+          <line x1="7" y1="7" x2="7.01" y2="7"/>
+        </svg>
+        Теги
+        <span class="tab-close">×</span>
+      </div>
+    </div>
+
+    <!-- ── VIEW: TAGS LIST ── -->
+    <div class="view active" id="view-list">
+
+      <!-- Create form -->
+      <div class="create-form">
+        <div class="create-row">
+          <input class="tag-input error" type="text" placeholder="Новый тег..." value="postgresql">
+          <button class="btn btn-primary btn-sm">Создать</button>
+        </div>
+        <div class="field-error">Тег с таким именем уже существует</div>
+      </div>
+
+      <!-- List header -->
+      <div class="tag-list-header">
+        <span class="list-label">Теги · 7</span>
+      </div>
+
+      <div class="tag-list-scroll">
+
+        <!-- Normal row -->
+        <div class="tag-row">
+          <span class="tag-hash">#</span>
+          <span class="tag-name">rag</span>
+          <span class="tag-count">32 заметки</span>
+          <div class="tag-actions">
+            <button class="btn-icon" title="Переименовать">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Удалить" onclick="document.getElementById('dlgDelete').classList.remove('hidden')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- INLINE RENAME ROW -->
+        <div class="tag-rename-row">
+          <span class="tag-hash">#</span>
+          <input class="rename-input" type="text" value="архитектура" autofocus>
+          <span class="rename-hint">Enter — сохранить · Esc — отмена</span>
+        </div>
+
+        <!-- More normal rows -->
+        <div class="tag-row">
+          <span class="tag-hash">#</span>
+          <span class="tag-name">ml</span>
+          <span class="tag-count">14 заметок</span>
+          <div class="tag-actions">
+            <button class="btn-icon" title="Переименовать">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Удалить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="tag-row">
+          <span class="tag-hash">#</span>
+          <span class="tag-name">python</span>
+          <span class="tag-count">11 заметок</span>
+          <div class="tag-actions">
+            <button class="btn-icon" title="Переименовать">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Удалить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="tag-row">
+          <span class="tag-hash">#</span>
+          <span class="tag-name">postgresql</span>
+          <span class="tag-count">7 заметок</span>
+          <div class="tag-actions">
+            <button class="btn-icon" title="Переименовать">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Удалить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="tag-row">
+          <span class="tag-hash">#</span>
+          <span class="tag-name">docker</span>
+          <span class="tag-count">5 заметок</span>
+          <div class="tag-actions">
+            <button class="btn-icon" title="Переименовать">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Удалить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="tag-row">
+          <span class="tag-hash">#</span>
+          <span class="tag-name">backend</span>
+          <span class="tag-count">3 заметки</span>
+          <div class="tag-actions">
+            <button class="btn-icon" title="Переименовать">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Удалить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── VIEW: EMPTY ── -->
+    <div class="view" id="view-empty">
+      <div class="create-form">
+        <div class="create-row">
+          <input class="tag-input" type="text" placeholder="Новый тег...">
+          <button class="btn btn-primary btn-sm">Создать</button>
+        </div>
+      </div>
+      <div class="empty-state">
+        <svg class="empty-icon ic" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+          <line x1="7" y1="7" x2="7.01" y2="7"/>
+        </svg>
+        <div>Тегов пока нет. Создайте первый тег.</div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: LOADING ── -->
+    <div class="view" id="view-loading">
+      <div class="create-form">
+        <div class="create-row">
+          <input class="tag-input" type="text" placeholder="Новый тег..." disabled style="opacity:.5">
+          <button class="btn btn-primary btn-sm" disabled style="opacity:.5">Создать</button>
+        </div>
+      </div>
+      <div class="tag-list-header">
+        <span class="list-label">Теги</span>
+      </div>
+      <div class="tag-list-scroll">
+        <div class="skel skel-row" style="height:44px;display:block;"></div>
+        <div class="skel skel-row" style="height:44px;display:block;opacity:.85;"></div>
+        <div class="skel skel-row" style="height:44px;display:block;opacity:.7;"></div>
+        <div class="skel skel-row" style="height:44px;display:block;opacity:.55;"></div>
+        <div class="skel skel-row" style="height:44px;display:block;opacity:.4;"></div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ══ CHAT (hidden by default) ══ -->
+  <aside class="chat hidden" id="chatPanel">
+    <div class="chat-header">
+      <span class="chat-title">Nocturn AI</span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm">+ Новый чат</button>
+        <button class="btn btn-ghost btn-sm">История ▾</button>
+      </div>
+    </div>
+    <div class="chat-empty-msg">Задайте вопрос о ваших заметках</div>
+    <div class="chat-input">
+      <div class="input-wrap">
+        <textarea class="chat-ta" rows="1" placeholder="Сообщение..."></textarea>
+        <button class="send-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+</div><!-- /shell -->
+
+<!-- ══ DIALOG: DELETE TAG ══ -->
+<div class="overlay hidden" id="dlgDelete">
+  <div class="dialog">
+    <div class="dialog-title">Удалить тег?</div>
+    <div class="dialog-body">Тег <strong>#rag</strong> будет отвязан от 32 заметок. Сами заметки останутся без изменений. Продолжить?</div>
+    <div class="dialog-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('dlgDelete').classList.add('hidden')">Отмена</button>
+      <button class="btn btn-danger" onclick="document.getElementById('dlgDelete').classList.add('hidden')">Удалить тег</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PROTOTYPE HELPER ══ -->
+<div class="view-switcher">
+  <button class="vs-btn on" data-view="list" onclick="switchView('list')">Список</button>
+  <button class="vs-btn" data-view="empty" onclick="switchView('empty')">Пусто</button>
+  <button class="vs-btn" data-view="loading" onclick="switchView('loading')">Загрузка</button>
+  <button class="vs-btn" onclick="document.getElementById('dlgDelete').classList.toggle('hidden')" style="color:var(--danger)">Диалог удаления</button>
+  <button class="vs-btn" onclick="toggleChat()" style="color:var(--accent)">Чат</button>
+</div>
+
+<script>
+  const views = ['list','empty','loading'];
+  function switchView(v) {
+    views.forEach(id => document.getElementById('view-'+id).classList.toggle('active', id===v));
+    document.querySelectorAll('.vs-btn[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view===v));
+  }
+  function toggleChat() {
+    document.getElementById('chatPanel').classList.toggle('hidden');
+  }
+</script>
+</body>
+</html>

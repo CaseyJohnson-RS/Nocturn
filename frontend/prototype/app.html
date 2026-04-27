@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Nocturn — App</title>
+  <style>
+    :root {
+      --bg-base:#1e1e1e; --bg-sidebar:#252526; --bg-tab:#2d2d2d;
+      --bg-input:#3c3c3c; --bg-hover:#2a2d2e; --bg-selected:#094771;
+      --bg-card:#252526; --bg-overlay:rgba(0,0,0,.5);
+      --fg:#cccccc; --fg-muted:#858585; --fg-disabled:#555;
+      --fg-link:#4daafc;
+      --border:#454545; --border-focus:#007acc;
+      --accent:#007acc; --accent-h:#1a8fd1;
+      --danger:#f44747; --success:#4ec9b0; --warning:#cca700;
+      --font:'Inter',system-ui,sans-serif; --mono:'JetBrains Mono','Fira Code',monospace;
+      --sidebar:48px; --chat:400px; --tabbar:35px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font);font-size:13px;color:var(--fg);background:var(--bg-base);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+    ::-webkit-scrollbar{width:6px;} ::-webkit-scrollbar-thumb{background:#424242;border-radius:3px;}
+
+    /* ── BANNERS ── */
+    .offline-banner{background:#0d2e4a;color:var(--fg-link);font-size:12px;font-weight:500;padding:5px 16px;display:flex;align-items:center;justify-content:center;gap:12px;flex-shrink:0;border-bottom:1px solid var(--border);}
+    .readonly-banner{background:var(--warning);color:#1a1a1a;font-size:12px;font-weight:500;padding:5px 16px;display:flex;align-items:center;justify-content:center;gap:12px;flex-shrink:0;}
+    .readonly-banner button,.offline-banner button{background:#1a1a1a;color:var(--warning);border:none;border-radius:4px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);}
+    .offline-banner button{color:var(--fg-link);}
+    .hidden{display:none!important;}
+
+    /* ── APP SHELL ── */
+    .shell{display:flex;flex:1;overflow:hidden;}
+
+    /* ── SIDEBAR ── */
+    .sidebar{width:var(--sidebar);background:var(--bg-sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;flex-shrink:0;}
+    .sidebar-top{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;}
+    .sidebar-bot{display:flex;flex-direction:column;align-items:center;gap:2px;}
+    .logo{width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700;font-size:18px;margin-bottom:6px;}
+    .nav-icon{position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--fg-muted);cursor:pointer;}
+    .nav-icon:hover{background:var(--bg-hover);color:var(--fg);}
+    .nav-icon.active{color:var(--accent);}
+    .nav-icon.active::before{content:'';position:absolute;left:-8px;top:50%;transform:translateY(-50%);width:2px;height:20px;background:var(--accent);border-radius:0 2px 2px 0;}
+    .nav-icon.chat-open{color:var(--accent);}
+    .divider{width:24px;height:1px;background:var(--border);margin:4px 0;}
+    .badge{position:absolute;top:4px;right:4px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
+    .avatar{width:24px;height:24px;border-radius:50%;background:#4a4a8a;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;}
+    svg.ic{display:block;}
+
+    /* ── MAIN ── */
+    .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+
+    /* ── TABBAR ── */
+    .tabbar{height:var(--tabbar);background:var(--bg-tab);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;flex-shrink:0;overflow:hidden;}
+    .tabbar-empty{height:var(--tabbar);background:var(--bg-tab);border-bottom:1px solid var(--border);flex-shrink:0;}
+    .tab{height:100%;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:12px;color:var(--fg-muted);background:var(--bg-tab);border-right:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;}
+    .tab.active{background:var(--bg-base);color:var(--fg);border-top:1px solid var(--accent);}
+    .tab-dot{width:8px;height:8px;border-radius:50%;background:var(--fg-muted);flex-shrink:0;}
+    .tab.active .tab-dot{background:var(--warning);}
+    .tab-close{width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:3px;font-size:14px;color:var(--fg-muted);opacity:0;cursor:pointer;}
+    .tab:hover .tab-close,.tab.active .tab-close{opacity:1;}
+
+    /* ── VIEWS ── */
+    .view{display:none;flex:1;flex-direction:column;overflow:hidden;}
+    .view.active{display:flex;}
+
+    /* ── NOTE LIST ── */
+    .list-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .list-label{font-size:11px;font-weight:600;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.05em;}
+    .bulk-bar{display:flex;align-items:center;gap:8px;padding:7px 16px;background:var(--bg-selected);border-bottom:1px solid var(--accent);flex-shrink:0;}
+    .bulk-label{font-size:12px;font-weight:500;flex:1;color:var(--fg);}
+    .tag-filter{display:flex;gap:6px;padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;}
+    .filter-chip{padding:2px 8px;border-radius:4px;font-size:11px;border:1px solid var(--border);color:var(--fg-muted);cursor:pointer;}
+    .filter-chip.on{background:var(--bg-selected);border-color:var(--accent);color:var(--fg);}
+    .notes-scroll{flex:1;overflow-y:auto;}
+    .note-row{padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:flex-start;gap:10px;}
+    .note-row:hover{background:var(--bg-hover);}
+    .note-row.sel{background:var(--bg-selected);}
+    .note-row.hovering{background:var(--bg-hover);}
+    .note-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+    .note-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+    .note-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .note-date{font-size:11px;color:var(--fg-muted);white-space:nowrap;flex-shrink:0;}
+    .note-preview{font-size:12px;color:var(--fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .note-tags{display:flex;gap:4px;flex-wrap:wrap;}
+    .tag-c{font-size:11px;color:var(--fg-muted);background:var(--bg-input);padding:1px 6px;border-radius:3px;}
+    /* row checkbox */
+    .row-check{width:16px;height:16px;border:1px solid var(--border);border-radius:3px;background:var(--bg-input);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-top:2px;}
+    .row-check.on{background:var(--accent);border-color:var(--accent);}
+    /* row hover delete btn */
+    .note-del{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:3px;color:var(--fg-muted);cursor:pointer;flex-shrink:0;background:transparent;border:none;opacity:0;transition:opacity .1s;}
+    .note-row:hover .note-del,.note-row.hovering .note-del{opacity:1;}
+    .note-del:hover{color:var(--danger);background:var(--bg-hover);}
+
+    /* ── BUTTONS ── */
+    .btn{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:var(--font);}
+    .btn-primary{background:var(--accent);color:#fff;}
+    .btn-ghost{background:transparent;color:var(--fg);border:1px solid var(--border);}
+    .btn-danger{background:var(--danger);color:#fff;}
+    .send-btn.stopping{background:var(--danger);}
+    .btn-sm{padding:3px 8px;font-size:11px;}
+    .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+    /* ── EDITOR ── */
+    .editor-head{padding:16px 24px 10px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .note-title-input{font-size:20px;font-weight:600;color:var(--fg);background:transparent;border:none;outline:none;width:100%;line-height:1.3;font-family:var(--font);}
+    .note-title-input::placeholder{color:var(--fg-disabled);}
+    .note-tags-row{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap;}
+    .chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;font-size:12px;}
+    .chip-x{color:var(--fg-muted);cursor:pointer;font-size:13px;line-height:1;}
+    .editor-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:5px 24px;border-bottom:1px solid var(--border);background:var(--bg-tab);flex-shrink:0;}
+    .save-status{font-size:11px;color:var(--fg-muted);display:flex;align-items:center;gap:4px;}
+    .save-dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex-shrink:0;}
+    .save-dot.saving{background:var(--warning);}
+    .save-dot.err{background:var(--danger);}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .save-dot.saving{animation:pulse 1s infinite;}
+    .editor-body{flex:1;padding:24px;line-height:1.7;overflow-y:auto;font-size:14px;}
+    .editor-body h2{font-size:16px;font-weight:600;margin:20px 0 8px;color:var(--fg);}
+    .editor-body p{margin-bottom:12px;color:var(--fg);}
+    .editor-body strong{font-weight:600;}
+    .editor-body code{font-family:var(--mono);font-size:12px;background:var(--bg-input);padding:2px 6px;border-radius:3px;}
+    .cursor{display:inline-block;width:2px;height:15px;background:var(--accent);animation:blink 1s infinite;vertical-align:text-bottom;}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+    /* ── DIFF ── */
+    .diff-toolbar{display:flex;align-items:center;gap:10px;padding:8px 24px;background:var(--bg-tab);border-bottom:1px solid var(--border);flex-shrink:0;}
+    .diff-label{font-size:12px;color:var(--fg-muted);flex:1;}
+    .diff-body{flex:1;overflow-y:auto;font-family:var(--mono);font-size:13px;}
+    .diff-line{padding:3px 24px;line-height:1.6;}
+    .diff-add{background:#1e3a1e;}
+    .diff-rem{background:#3a1e1e;color:var(--fg-muted);text-decoration:line-through;}
+
+    /* ── EMPTY TABS ── */
+    .empty-tabs-msg{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--fg-disabled);font-size:13px;text-align:center;}
+
+    /* ── CHAT ── */
+    .chat{width:var(--chat);background:var(--bg-base);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+    .chat-header-wrap{position:relative;flex-shrink:0;}
+    .chat-header{height:var(--tabbar);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--bg-tab);}
+    .chat-title{font-size:12px;font-weight:500;color:var(--fg-muted);}
+    .chat-actions{display:flex;gap:6px;}
+    .chat-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;}
+    .msg{display:flex;flex-direction:column;gap:3px;}
+    .msg-user{align-items:flex-end;}
+    .msg-ai{align-items:flex-start;}
+    .msg-label{font-size:11px;color:var(--fg-muted);padding:0 4px;}
+    .bubble{max-width:88%;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.5;}
+    .msg-user .bubble{background:var(--bg-selected);border-radius:8px 8px 2px 8px;}
+    .msg-ai .bubble{background:var(--bg-card);border:1px solid var(--border);border-radius:8px 8px 8px 2px;}
+    /* thinking animation */
+    .thinking{display:flex;align-items:center;gap:5px;color:var(--fg-muted);font-size:12px;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px 8px 8px 2px;width:fit-content;}
+    @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-4px)}}
+    .tdot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--fg-muted);animation:bounce 1.2s infinite;}
+    .tdot.d2{animation-delay:.2s;} .tdot.d3{animation-delay:.4s;}
+    /* proposals */
+    .prop-group-bar{display:flex;gap:6px;margin-bottom:8px;padding:0 2px;}
+    .prop-card{background:var(--bg-card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:10px 12px;margin-top:6px;}
+    .prop-card.applied{border-left-color:var(--success);opacity:.65;}
+    .prop-type{font-size:11px;color:var(--fg-muted);margin-bottom:4px;}
+    .prop-link{font-size:12px;font-weight:600;color:var(--fg-link);cursor:pointer;}
+    .prop-summary{font-size:12px;color:var(--fg-muted);margin:4px 0 8px;}
+    .prop-status{font-size:11px;color:var(--success);}
+    .pend-card{background:var(--bg-card);border:1px solid var(--border);border-left:3px solid var(--warning);border-radius:6px;padding:10px 12px;margin-top:6px;}
+    .pend-type{font-size:11px;color:var(--fg-muted);margin-bottom:4px;}
+    .pend-summary{font-size:12px;color:var(--fg);margin-bottom:8px;}
+    /* bottom bar */
+    .blocked-hint{padding:7px 12px;background:var(--bg-card);border-top:1px solid var(--border);font-size:11px;color:var(--warning);text-align:center;flex-shrink:0;}
+    /* input */
+    .chat-input{border-top:1px solid var(--border);padding:12px;flex-shrink:0;}
+    .attached{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+    .att-chip{display:flex;align-items:center;gap:4px;padding:2px 8px;background:var(--bg-selected);border-radius:4px;font-size:11px;}
+    .input-wrap{display:flex;align-items:flex-end;gap:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:7px 10px;}
+    .chat-ta{flex:1;background:transparent;border:none;outline:none;color:var(--fg);font-size:13px;font-family:var(--font);resize:none;min-height:20px;max-height:120px;}
+    .chat-ta::placeholder{color:var(--fg-muted);}
+    .send-btn{width:28px;height:28px;background:var(--accent);border:none;border-radius:4px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .send-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+    /* ── HISTORY DROPDOWN ── */
+    .history-dd{position:absolute;top:calc(100% + 2px);right:4px;width:300px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;z-index:30;box-shadow:0 6px 20px rgba(0,0,0,.5);overflow:hidden;}
+    .h-item{display:flex;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;gap:8px;}
+    .h-item:last-child{border-bottom:none;}
+    .h-item:hover{background:var(--bg-hover);}
+    .h-item.h-active{background:rgba(9,71,113,.3);}
+    .h-title{flex:1;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .h-date{font-size:11px;color:var(--fg-muted);flex-shrink:0;}
+    .h-menu-btn{width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:3px;color:var(--fg-muted);font-size:15px;line-height:1;flex-shrink:0;cursor:pointer;}
+    .h-menu-btn:hover{background:var(--bg-hover);color:var(--fg);}
+    .h-rename-row{padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-hover);}
+    .h-rename-input{width:100%;background:var(--bg-input);border:1px solid var(--border-focus);border-radius:4px;padding:4px 8px;color:var(--fg);font-size:12px;font-family:var(--font);outline:none;}
+    .h-rename-hint{font-size:10px;color:var(--fg-muted);margin-top:3px;}
+
+    /* ── PROFILE POPUP ── */
+    .pp-wrap{position:fixed;inset:0;background:var(--bg-overlay);display:flex;align-items:center;justify-content:center;z-index:200;}
+    .pp{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:24px;width:420px;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;gap:18px;position:relative;}
+    .pp-close{position:absolute;top:16px;right:16px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--fg-muted);cursor:pointer;border-radius:4px;font-size:18px;line-height:1;background:none;border:none;}
+    .pp-close:hover{background:var(--bg-hover);color:var(--fg);}
+    .pp-header{display:flex;align-items:center;gap:14px;}
+    .pp-avatar{width:52px;height:52px;border-radius:50%;background:#4a4a8a;color:#fff;font-size:22px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .pp-name{font-size:16px;font-weight:600;line-height:1.3;}
+    .pp-email{font-size:12px;color:var(--fg-muted);margin-top:2px;}
+    .pp-date{font-size:11px;color:var(--fg-disabled);margin-top:2px;}
+    .pp-divider{height:1px;background:var(--border);}
+    .pp-section-title{font-size:11px;font-weight:600;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;}
+    .pp-input{width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;padding:7px 10px;color:var(--fg);font-size:13px;font-family:var(--font);outline:none;}
+    .pp-input:focus{border-color:var(--border-focus);}
+    .pp-input.pp-err{border-color:var(--danger);}
+    .pp-field-err{font-size:11px;color:var(--danger);margin-top:4px;}
+    .pp-row{display:flex;flex-direction:column;gap:6px;}
+    .pp-row-inline{display:flex;gap:8px;align-items:flex-start;}
+    .lang-toggle{display:flex;border:1px solid var(--border);border-radius:4px;overflow:hidden;width:fit-content;}
+    .lang-btn{padding:6px 18px;font-size:12px;cursor:pointer;border:none;background:transparent;color:var(--fg-muted);font-family:var(--font);}
+    .lang-btn.on{background:var(--accent);color:#fff;}
+    .pp-footer{display:flex;align-items:center;gap:8px;padding-top:4px;}
+    .btn-logout{flex:1;background:transparent;color:var(--fg);border:1px solid var(--border);}
+    .btn-danger-outline{background:transparent;color:var(--danger);border:1px solid var(--danger);}
+
+    /* ── OVERLAY / DIALOG ── */
+    .overlay{position:fixed;inset:0;background:var(--bg-overlay);display:flex;align-items:center;justify-content:center;z-index:100;}
+    .dialog{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:24px;width:440px;display:flex;flex-direction:column;gap:16px;}
+    .dialog-title{font-size:16px;font-weight:600;}
+    .dialog-body{font-size:13px;color:var(--fg-muted);line-height:1.5;}
+    .dialog-footer{display:flex;justify-content:flex-end;gap:8px;}
+
+    /* ── SKELETON ── */
+    @keyframes sk-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .skel{background:var(--bg-hover);border-radius:4px;animation:sk-pulse 1.5s infinite;}
+
+    /* ── PROTOTYPE HELPER ── */
+    .view-switcher{position:fixed;bottom:12px;left:60px;z-index:50;display:flex;flex-wrap:wrap;gap:3px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:4px;max-width:660px;}
+    .vs-btn{padding:3px 8px;border-radius:3px;font-size:11px;cursor:pointer;border:none;font-family:var(--font);background:transparent;color:var(--fg-muted);}
+    .vs-btn.on{background:var(--accent);color:#fff;}
+    .vs-sep{width:1px;background:var(--border);margin:2px 1px;align-self:stretch;}
+  </style>
+</head>
+<body>
+
+<!-- ══ OFFLINE BANNER ══ -->
+<div class="offline-banner hidden" id="offlineBanner">
+  ⚡ Нет соединения с сервером. Проверьте подключение к интернету.
+</div>
+
+<!-- ══ READ-ONLY BANNER ══ -->
+<div class="readonly-banner hidden" id="roBanner">
+  ⚠ Этот клиент работает в режиме просмотра — приложение открыто в другом окне.
+  <button onclick="document.getElementById('roBanner').classList.add('hidden')">Взять управление</button>
+</div>
+
+<div class="shell">
+
+  <!-- ══ SIDEBAR ══ -->
+  <nav class="sidebar">
+    <div class="sidebar-top">
+      <div class="logo">N</div>
+
+      <div class="nav-icon active" data-view="list" title="Все заметки" onclick="switchView('list')">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+
+      <div class="nav-icon" title="Поиск" onclick="location.href='search.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      </div>
+
+      <div class="nav-icon" title="Теги" onclick="location.href='tags.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+          <line x1="7" y1="7" x2="7.01" y2="7"/>
+        </svg>
+      </div>
+
+      <div class="nav-icon chat-open" title="AI-чат" onclick="toggleChat()">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span class="badge">2</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="nav-icon" title="Корзина" onclick="location.href='trash.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="sidebar-bot">
+      <div class="divider"></div>
+      <div class="nav-icon" title="Администрирование" onclick="location.href='admin.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div class="nav-icon" title="Сменить тему">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      </div>
+      <div class="nav-icon" title="Профиль" onclick="toggleProfile()">
+        <div class="avatar">R</div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ══ MAIN ══ -->
+  <div class="main">
+
+    <!-- TAB BAR (normal) -->
+    <div class="tabbar" id="tabbar">
+      <div class="tab" id="tab-list" onclick="switchView('list')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+        Все заметки
+        <span class="tab-close">×</span>
+      </div>
+      <div class="tab active" id="tab-editor" onclick="switchView('editor')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+        Архитектура RAG-системы
+        <span class="tab-dot"></span>
+        <span class="tab-close" onclick="event.stopPropagation();document.getElementById('dlgUnsaved').classList.remove('hidden')">×</span>
+      </div>
+      <div class="tab" id="tab-diff" onclick="switchView('diff')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+        Настройка окружения
+        <span class="tab-close">×</span>
+      </div>
+    </div>
+
+    <!-- TAB BAR (empty) -->
+    <div class="tabbar-empty hidden" id="tabbar-empty"></div>
+
+    <!-- ── VIEW: NOTE LIST ── -->
+    <div class="view" id="view-list">
+      <div class="list-header">
+        <span class="list-label">Все заметки · 47</span>
+        <button class="btn btn-primary btn-sm">+ Создать заметку</button>
+      </div>
+      <div class="tag-filter">
+        <span class="filter-chip on">#rag</span>
+        <span class="filter-chip">#архитектура</span>
+        <span class="filter-chip">#ml</span>
+        <span class="filter-chip">#python</span>
+        <span class="filter-chip">Без тегов</span>
+      </div>
+      <div class="notes-scroll">
+        <div class="note-row sel">
+          <div class="note-content">
+            <div class="note-top">
+              <span class="note-title">Архитектура RAG-системы</span>
+              <span class="note-date">27 апр, 14:32</span>
+            </div>
+            <div class="note-preview">Pipeline состоит из двух этапов: индексации и поиска. При сохранении заметки...</div>
+            <div class="note-tags"><span class="tag-c">#rag</span><span class="tag-c">#архитектура</span><span class="tag-c">#ml</span></div>
+          </div>
+          <button class="note-del" title="Удалить">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+        <!-- Row in hover state (shows delete button) -->
+        <div class="note-row hovering">
+          <div class="note-content">
+            <div class="note-top">
+              <span class="note-title">Семантический поиск с pgvector</span>
+              <span class="note-date">25 апр, 09:14</span>
+            </div>
+            <div class="note-preview">pgvector — расширение PostgreSQL для хранения и поиска векторов. Поддерживает...</div>
+            <div class="note-tags"><span class="tag-c">#rag</span><span class="tag-c">#postgresql</span></div>
+          </div>
+          <button class="note-del" title="Удалить" onclick="document.getElementById('dlgDelete').classList.remove('hidden')" style="opacity:1;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+        <div class="note-row">
+          <div class="note-content">
+            <div class="note-top"><span class="note-title">LLM-провайдеры: сравнение</span><span class="note-date">22 апр, 17:55</span></div>
+            <div class="note-preview">OpenAI GPT-4o, Anthropic Claude, Mistral — сравниваю по латентности, стоимости...</div>
+            <div class="note-tags"><span class="tag-c">#ml</span></div>
+          </div>
+          <button class="note-del" title="Удалить"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+        </div>
+        <div class="note-row">
+          <div class="note-content">
+            <div class="note-top"><span class="note-title">Chunking-стратегии для RAG</span><span class="note-date">20 апр, 11:03</span></div>
+            <div class="note-preview">Fixed-size chunking vs. semantic chunking. При fixed-size важно подобрать перекрытие...</div>
+            <div class="note-tags"><span class="tag-c">#rag</span></div>
+          </div>
+          <button class="note-del" title="Удалить"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+        </div>
+        <div class="note-row">
+          <div class="note-content">
+            <div class="note-top"><span class="note-title">Настройка окружения разработки</span><span class="note-date">18 апр, 08:30</span></div>
+            <div class="note-preview">Docker Compose, Poetry, pre-commit hooks. Сначала устанавливаем зависимости через...</div>
+            <div class="note-tags"><span class="tag-c">#python</span></div>
+          </div>
+          <button class="note-del" title="Удалить"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: NOTE LIST (BULK SELECTION) ── -->
+    <div class="view" id="view-list-bulk">
+      <div class="list-header">
+        <span class="list-label">Все заметки · 47</span>
+        <button class="btn btn-primary btn-sm">+ Создать заметку</button>
+      </div>
+      <div class="tag-filter">
+        <span class="filter-chip on">#rag</span>
+        <span class="filter-chip">#архитектура</span>
+        <span class="filter-chip">#ml</span>
+      </div>
+      <!-- Bulk action bar -->
+      <div class="bulk-bar">
+        <span class="bulk-label">2 выбрано</span>
+        <button class="btn btn-danger btn-sm">✕ Удалить выбранные (2)</button>
+        <button class="btn btn-ghost btn-sm">Снять выбор</button>
+      </div>
+      <div class="notes-scroll">
+        <!-- checked -->
+        <div class="note-row" style="background:rgba(9,71,113,.25);">
+          <div class="row-check on" style="margin-top:2px;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="note-content">
+            <div class="note-top"><span class="note-title">Архитектура RAG-системы</span><span class="note-date">27 апр, 14:32</span></div>
+            <div class="note-preview">Pipeline состоит из двух этапов: индексации и поиска...</div>
+            <div class="note-tags"><span class="tag-c">#rag</span><span class="tag-c">#архитектура</span></div>
+          </div>
+        </div>
+        <!-- checked -->
+        <div class="note-row" style="background:rgba(9,71,113,.25);">
+          <div class="row-check on" style="margin-top:2px;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="note-content">
+            <div class="note-top"><span class="note-title">Chunking-стратегии для RAG</span><span class="note-date">20 апр, 11:03</span></div>
+            <div class="note-preview">Fixed-size chunking vs. semantic chunking...</div>
+            <div class="note-tags"><span class="tag-c">#rag</span></div>
+          </div>
+        </div>
+        <!-- unchecked -->
+        <div class="note-row">
+          <div class="row-check" style="margin-top:2px;"></div>
+          <div class="note-content">
+            <div class="note-top"><span class="note-title">LLM-провайдеры: сравнение</span><span class="note-date">22 апр, 17:55</span></div>
+            <div class="note-preview">OpenAI GPT-4o, Anthropic Claude, Mistral...</div>
+            <div class="note-tags"><span class="tag-c">#ml</span></div>
+          </div>
+        </div>
+        <div class="note-row">
+          <div class="row-check" style="margin-top:2px;"></div>
+          <div class="note-content">
+            <div class="note-top"><span class="note-title">Семантический поиск с pgvector</span><span class="note-date">25 апр, 09:14</span></div>
+            <div class="note-preview">pgvector — расширение PostgreSQL...</div>
+            <div class="note-tags"><span class="tag-c">#rag</span><span class="tag-c">#postgresql</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: EDITOR ── -->
+    <div class="view active" id="view-editor">
+      <div class="editor-head">
+        <input class="note-title-input" value="Архитектура RAG-системы">
+        <div class="note-tags-row">
+          <span class="chip">#rag <span class="chip-x">×</span></span>
+          <span class="chip">#архитектура <span class="chip-x">×</span></span>
+          <span class="chip">#ml <span class="chip-x">×</span></span>
+          <span style="font-size:12px;color:var(--fg-muted);cursor:pointer;">+ тег</span>
+        </div>
+      </div>
+      <div class="editor-toolbar">
+        <div class="save-status" id="saveStatus">
+          <span class="save-dot" id="saveDot"></span>
+          <span id="saveText">Сохранено</span>
+        </div>
+        <button class="btn btn-ghost btn-sm">📎 Прикрепить к чату</button>
+      </div>
+      <div class="editor-body">
+        <h2>Обзор</h2>
+        <p>RAG (Retrieval-Augmented Generation) — подход, при котором LLM получает доступ к внешней базе знаний через механизм поиска. В Nocturn реализован двухэтапный pipeline.</p>
+        <h2>Этапы</h2>
+        <p><strong>Этап 1 — Индексация:</strong> при сохранении заметки текст разбивается на чанки по <code>500 токенов</code> с перекрытием 50 токенов. Для каждого чанка генерируется embedding через внешний API.<span class="cursor"></span></p>
+        <p><strong>Этап 2 — Поиск:</strong> запрос пользователя преобразуется в embedding, после чего выполняется косинусный поиск по таблице <code>note_chunks</code> с расширением pgvector.</p>
+        <h2>Очередь embedding</h2>
+        <p>Генерация embedding выполняется асинхронно. Статусы задачи: <code>pending</code> → <code>processing</code> → <code>done</code> / <code>failed</code>. При недоступности сервиса задача ставится в очередь и обрабатывается позже.</p>
+      </div>
+    </div>
+
+    <!-- ── VIEW: DIFF ── -->
+    <div class="view" id="view-diff">
+      <div class="editor-head">
+        <input class="note-title-input" value="Настройка окружения разработки" style="opacity:.7;">
+        <div class="note-tags-row">
+          <span class="chip">#python <span class="chip-x">×</span></span>
+        </div>
+      </div>
+      <div class="diff-toolbar">
+        <span class="diff-label">✏ Предложение: исправить команду установки зависимостей</span>
+        <button class="btn btn-primary btn-sm">✓ Принять</button>
+        <button class="btn btn-ghost btn-sm">✕ Отклонить</button>
+      </div>
+      <div class="diff-body">
+        <div class="diff-line">## Установка зависимостей</div>
+        <div class="diff-line">&nbsp;</div>
+        <div class="diff-line">Клонируем репозиторий и переходим в директорию:</div>
+        <div class="diff-line">&nbsp;</div>
+        <div class="diff-line diff-rem">```bash
+pip install -r requirements.txt
+```</div>
+        <div class="diff-line diff-add">```bash
+poetry install --with dev
+```</div>
+        <div class="diff-line">&nbsp;</div>
+        <div class="diff-line">Запускаем pre-commit хуки:</div>
+        <div class="diff-line">&nbsp;</div>
+        <div class="diff-line">```bash
+pre-commit install
+```</div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: EMPTY TABS ── -->
+    <div class="view" id="view-empty-tabs">
+      <div class="tabbar-empty" id="tabbar-empty-inner"></div>
+      <div class="empty-tabs-msg">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--fg-disabled)">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <span>Откройте заметку или выберите раздел на боковой панели</span>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ══ CHAT ══ -->
+  <aside class="chat" id="chatPanel">
+    <div class="chat-header-wrap">
+      <div class="chat-header">
+        <span class="chat-title">Nocturn AI</span>
+        <div class="chat-actions">
+          <button class="btn btn-ghost btn-sm">+ Новый чат</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleHistoryDD()">История ▾</button>
+        </div>
+      </div>
+
+      <!-- HISTORY DROPDOWN -->
+      <div class="history-dd hidden" id="historyDD">
+        <!-- Active session -->
+        <div class="h-item h-active">
+          <span class="h-title">RAG-архитектура и embedding</span>
+          <span class="h-date">27 апр</span>
+          <span class="h-menu-btn">⋯</span>
+        </div>
+        <!-- Row in rename mode -->
+        <div class="h-rename-row">
+          <input class="h-rename-input" type="text" value="Оптимизация chunking">
+          <div class="h-rename-hint">Enter — сохранить · Esc — отмена</div>
+        </div>
+        <!-- Normal rows -->
+        <div class="h-item">
+          <span class="h-title">Сравнение LLM-провайдеров</span>
+          <span class="h-date">22 апр</span>
+          <span class="h-menu-btn">⋯</span>
+        </div>
+        <div class="h-item">
+          <span class="h-title">Настройка dev-окружения</span>
+          <span class="h-date">19 апр</span>
+          <span class="h-menu-btn">⋯</span>
+        </div>
+        <div class="h-item">
+          <span class="h-title">Docker и контейнеризация</span>
+          <span class="h-date">10 апр</span>
+          <span class="h-menu-btn">⋯</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-msgs" id="chatMsgs">
+      <!-- User message -->
+      <div class="msg msg-user">
+        <span class="msg-label">Вы</span>
+        <div class="bubble">
+          Можешь отредактировать заметку об архитектуре RAG — добавь раздел о метриках качества? И исправь команду установки в заметке про окружение.
+        </div>
+      </div>
+
+      <!-- AI with proposals -->
+      <div class="msg msg-ai">
+        <span class="msg-label">Nocturn AI</span>
+        <div class="bubble" style="width:100%">
+          <p style="margin-bottom:10px;">Конечно! Подготовил два предложения:</p>
+
+          <div class="prop-group-bar">
+            <button class="btn btn-primary btn-sm">✓ Принять всё (2)</button>
+            <button class="btn btn-ghost btn-sm">✕ Отклонить всё</button>
+          </div>
+
+          <div class="prop-card">
+            <div class="prop-type">✏ Редактировать заметку</div>
+            <div class="prop-link" onclick="switchView('editor')">Архитектура RAG-системы</div>
+            <div class="prop-summary">Добавить раздел «Метрики качества»: precision@k, recall@k, MRR.</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-primary btn-sm">Принять</button>
+              <button class="btn btn-ghost btn-sm">Отклонить</button>
+            </div>
+          </div>
+
+          <div class="prop-card">
+            <div class="prop-type">✏ Редактировать заметку</div>
+            <div class="prop-link" onclick="switchView('diff')">Настройка окружения разработки</div>
+            <div class="prop-summary">Заменить <code style="font-family:var(--mono);font-size:11px;background:var(--bg-input);padding:1px 4px;border-radius:3px;">pip install</code> на <code style="font-family:var(--mono);font-size:11px;background:var(--bg-input);padding:1px 4px;border-radius:3px;">poetry install</code>.</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-primary btn-sm">Принять</button>
+              <button class="btn btn-ghost btn-sm">Отклонить</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending confirmation -->
+      <div class="msg msg-ai">
+        <span class="msg-label">Nocturn AI</span>
+        <div class="bubble" style="width:100%">
+          <p style="margin-bottom:10px;">Также нашёл 12 заметок без тега <code style="font-family:var(--mono);font-size:11px;background:var(--bg-input);padding:1px 4px;border-radius:3px;">#python</code>, хотя они посвящены Python. Добавить тег?</p>
+          <div class="pend-card">
+            <div class="pend-type">🔄 Массовая операция · 12 заметок</div>
+            <div class="pend-summary">Добавить тег <strong>#python</strong> к 12 заметкам о Python.</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-primary btn-sm">Подтвердить</button>
+              <button class="btn btn-ghost btn-sm">Отклонить</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- THINKING MESSAGE (shown during generation) -->
+      <div class="msg msg-ai hidden" id="thinkingMsg">
+        <span class="msg-label">Nocturn AI</span>
+        <div class="thinking">
+          <span class="tdot">●</span><span class="tdot d2">●</span><span class="tdot d3">●</span>
+          &nbsp;Думаю...
+        </div>
+      </div>
+    </div>
+
+    <!-- Blocked hint (normal state) -->
+    <div class="blocked-hint" id="blockedHint">⚠ Обработайте предложения ассистента, чтобы продолжить</div>
+
+    <!-- Input -->
+    <div class="chat-input">
+      <div class="attached">
+        <div class="att-chip">📄 Архитектура RAG-системы <span style="color:var(--fg-muted);cursor:pointer;margin-left:2px;">×</span></div>
+      </div>
+      <div class="input-wrap" id="inputWrap" style="opacity:.45;">
+        <textarea class="chat-ta" id="chatTa" rows="1" placeholder="Сообщение..." disabled></textarea>
+        <button class="send-btn" id="sendBtn" disabled onclick="if(window.genActive)toggleGen()">
+          <svg id="sendIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          <svg id="stopIcon" class="hidden" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+</div><!-- /shell -->
+
+<!-- ══ PROFILE POPUP ══ -->
+<div class="pp-wrap hidden" id="profilePopup">
+  <div class="pp">
+    <button class="pp-close" onclick="toggleProfile()">×</button>
+
+    <!-- Header -->
+    <div class="pp-header">
+      <div class="pp-avatar">R</div>
+      <div>
+        <div class="pp-name">ruslan</div>
+        <div class="pp-email">ruslan@example.com</div>
+        <div class="pp-date">Зарегистрирован 12 янв. 2026</div>
+      </div>
+    </div>
+
+    <div class="pp-divider"></div>
+
+    <!-- Change nickname -->
+    <div>
+      <div class="pp-section-title">Никнейм</div>
+      <div class="pp-row-inline">
+        <input class="pp-input" type="text" value="ruslan" style="flex:1;">
+        <button class="btn btn-ghost btn-sm">Сохранить</button>
+      </div>
+    </div>
+
+    <!-- Change password -->
+    <div>
+      <div class="pp-section-title">Пароль</div>
+      <div class="pp-row" style="gap:8px;">
+        <div>
+          <input class="pp-input pp-err" type="password" placeholder="Текущий пароль" value="wrongpass">
+          <div class="pp-field-err">Неверный текущий пароль</div>
+        </div>
+        <input class="pp-input" type="password" placeholder="Новый пароль">
+        <input class="pp-input" type="password" placeholder="Повторите новый пароль">
+        <div>
+          <button class="btn btn-ghost btn-sm">Сменить пароль</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pp-divider"></div>
+
+    <!-- Language -->
+    <div>
+      <div class="pp-section-title">Язык интерфейса</div>
+      <div class="lang-toggle">
+        <button class="lang-btn on">Русский</button>
+        <button class="lang-btn">English</button>
+      </div>
+    </div>
+
+    <div class="pp-divider"></div>
+
+    <!-- Footer -->
+    <div class="pp-footer">
+      <button class="btn btn-logout" style="flex:1;">Выйти</button>
+      <button class="btn btn-danger-outline">Удалить аккаунт</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DIALOG: DELETE NOTE ══ -->
+<div class="overlay hidden" id="dlgDelete">
+  <div class="dialog">
+    <div class="dialog-title">Удалить заметку?</div>
+    <div class="dialog-body">Заметка «Семантический поиск с pgvector» будет перемещена в корзину. Вы сможете восстановить её в течение 30 дней.</div>
+    <div class="dialog-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('dlgDelete').classList.add('hidden')">Отмена</button>
+      <button class="btn btn-danger" onclick="document.getElementById('dlgDelete').classList.add('hidden')">Удалить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DIALOG: UNSAVED CHANGES ══ -->
+<div class="overlay hidden" id="dlgUnsaved">
+  <div class="dialog">
+    <div class="dialog-title">Закрыть без сохранения?</div>
+    <div class="dialog-body">Несохранённые изменения в заметке «Архитектура RAG-системы» будут потеряны.</div>
+    <div class="dialog-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('dlgUnsaved').classList.add('hidden')">Отмена</button>
+      <button class="btn btn-ghost" style="color:var(--danger);border-color:var(--danger);" onclick="document.getElementById('dlgUnsaved').classList.add('hidden')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PROTOTYPE HELPER ══ -->
+<div class="view-switcher">
+  <!-- Views -->
+  <button class="vs-btn" data-view="list" onclick="switchView('list')">Список</button>
+  <button class="vs-btn" data-view="list-bulk" onclick="switchView('list-bulk')">Список (выбор)</button>
+  <button class="vs-btn on" data-view="editor" onclick="switchView('editor')">Редактор</button>
+  <button class="vs-btn" data-view="diff" onclick="switchView('diff')">Diff</button>
+  <button class="vs-btn" data-view="empty-tabs" onclick="switchView('empty-tabs')">Пустые табы</button>
+  <div class="vs-sep"></div>
+  <!-- Autosave states -->
+  <button class="vs-btn" onclick="cycleSave()" title="Переключить состояние сохранения">💾 Авт.</button>
+  <div class="vs-sep"></div>
+  <!-- Chat states -->
+  <button class="vs-btn" onclick="toggleGen()">⚙ Генерация</button>
+  <button class="vs-btn" onclick="toggleHistoryDD()">История</button>
+  <button class="vs-btn" onclick="toggleChat()">Чат</button>
+  <div class="vs-sep"></div>
+  <!-- Overlays / banners -->
+  <button class="vs-btn" onclick="toggleProfile()">Профиль</button>
+  <button class="vs-btn" onclick="document.getElementById('roBanner').classList.toggle('hidden')" style="color:var(--warning)">Read-only</button>
+  <button class="vs-btn" onclick="document.getElementById('offlineBanner').classList.toggle('hidden')" style="color:var(--fg-link)">Offline</button>
+  <div class="vs-sep"></div>
+  <!-- Dialogs -->
+  <button class="vs-btn" onclick="document.getElementById('dlgDelete').classList.toggle('hidden')" style="color:var(--danger)">Диалог (удалить)</button>
+  <button class="vs-btn" onclick="document.getElementById('dlgUnsaved').classList.toggle('hidden')" style="color:var(--warning)">Диалог (закрыть)</button>
+</div>
+
+<script>
+  const allViews = ['list','list-bulk','editor','diff','empty-tabs'];
+
+  function switchView(v) {
+    allViews.forEach(id => {
+      const el = document.getElementById('view-'+id);
+      if (el) el.classList.toggle('active', id===v);
+    });
+    // tab bar visibility
+    const hasTabBar = v !== 'empty-tabs';
+    document.getElementById('tabbar').classList.toggle('hidden', !hasTabBar);
+    // tab active states
+    ['list','editor','diff'].forEach(id => {
+      const tab = document.getElementById('tab-'+id);
+      if (tab) tab.classList.toggle('active', id===v);
+    });
+    // sidebar active
+    document.querySelectorAll('.nav-icon[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view===v));
+    // vs-btn states
+    document.querySelectorAll('.vs-btn[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view===v));
+  }
+
+  function toggleChat() {
+    document.getElementById('chatPanel').classList.toggle('hidden');
+  }
+
+  function toggleProfile() {
+    document.getElementById('profilePopup').classList.toggle('hidden');
+  }
+
+  function toggleHistoryDD() {
+    document.getElementById('historyDD').classList.toggle('hidden');
+  }
+
+  // Autosave state cycling
+  const saveStates = [
+    {cls:'', text:'Сохранено'},
+    {cls:'saving', text:'Сохраняется...'},
+    {cls:'err', text:'Ошибка сохранения'},
+  ];
+  let saveIdx = 0;
+  function cycleSave() {
+    saveIdx = (saveIdx + 1) % 3;
+    const s = saveStates[saveIdx];
+    document.getElementById('saveDot').className = 'save-dot ' + s.cls;
+    document.getElementById('saveText').textContent = s.text;
+  }
+
+  // Generation state toggle
+  window.genActive = false;
+  function toggleGen() {
+    window.genActive = !window.genActive;
+    const btn = document.getElementById('sendBtn');
+    document.getElementById('thinkingMsg').classList.toggle('hidden', !window.genActive);
+    document.getElementById('blockedHint').classList.toggle('hidden', window.genActive);
+    document.getElementById('sendIcon').classList.toggle('hidden', window.genActive);
+    document.getElementById('stopIcon').classList.toggle('hidden', !window.genActive);
+    btn.classList.toggle('stopping', window.genActive);
+    btn.disabled = !window.genActive;
+    if (window.genActive) {
+      document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+    }
+  }
+
+  // Start on editor view
+  switchView('editor');
+</script>
+</body>
+</html>

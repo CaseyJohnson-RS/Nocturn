@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Nocturn — Корзина</title>
+  <style>
+    :root {
+      --bg-base:#1e1e1e; --bg-sidebar:#252526; --bg-tab:#2d2d2d;
+      --bg-input:#3c3c3c; --bg-hover:#2a2d2e; --bg-selected:#094771;
+      --bg-card:#252526; --bg-overlay:rgba(0,0,0,.5);
+      --fg:#cccccc; --fg-muted:#858585; --fg-disabled:#555;
+      --fg-link:#4daafc;
+      --border:#454545; --border-focus:#007acc;
+      --accent:#007acc; --accent-h:#1a8fd1;
+      --danger:#f44747; --success:#4ec9b0; --warning:#cca700;
+      --font:'Inter',system-ui,sans-serif; --mono:'JetBrains Mono','Fira Code',monospace;
+      --sidebar:48px; --chat:400px; --tabbar:35px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font);font-size:13px;color:var(--fg);background:var(--bg-base);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+    ::-webkit-scrollbar{width:6px;} ::-webkit-scrollbar-thumb{background:#424242;border-radius:3px;}
+    .shell{display:flex;flex:1;overflow:hidden;}
+
+    /* SIDEBAR */
+    .sidebar{width:var(--sidebar);background:var(--bg-sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;flex-shrink:0;}
+    .sidebar-top{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;}
+    .sidebar-bot{display:flex;flex-direction:column;align-items:center;gap:2px;}
+    .logo{width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700;font-size:18px;margin-bottom:6px;}
+    .nav-icon{position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--fg-muted);cursor:pointer;}
+    .nav-icon:hover{background:var(--bg-hover);color:var(--fg);}
+    .nav-icon.active{color:var(--accent);}
+    .nav-icon.active::before{content:'';position:absolute;left:-8px;top:50%;transform:translateY(-50%);width:2px;height:20px;background:var(--accent);border-radius:0 2px 2px 0;}
+    .divider{width:24px;height:1px;background:var(--border);margin:4px 0;}
+    .badge{position:absolute;top:4px;right:4px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
+    .avatar{width:24px;height:24px;border-radius:50%;background:#4a4a8a;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;}
+    svg.ic{display:block;}
+
+    /* MAIN */
+    .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+    .tabbar{height:var(--tabbar);background:var(--bg-tab);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;flex-shrink:0;overflow:hidden;}
+    .tab{height:100%;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:12px;color:var(--fg-muted);background:var(--bg-tab);border-right:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;}
+    .tab.active{background:var(--bg-base);color:var(--fg);border-top:1px solid var(--accent);}
+    .tab-close{width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:3px;font-size:14px;color:var(--fg-muted);opacity:0;}
+    .tab:hover .tab-close,.tab.active .tab-close{opacity:1;}
+    .view{display:none;flex:1;flex-direction:column;overflow:hidden;}
+    .view.active{display:flex;}
+
+    /* BUTTONS */
+    .btn{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:var(--font);}
+    .btn-primary{background:var(--accent);color:#fff;}
+    .btn-ghost{background:transparent;color:var(--fg);border:1px solid var(--border);}
+    .btn-danger{background:var(--danger);color:#fff;}
+    .btn-danger-ghost{background:transparent;color:var(--danger);border:1px solid var(--danger);}
+    .btn-icon{background:transparent;color:var(--fg-muted);border:none;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;}
+    .btn-icon:hover{background:var(--bg-hover);color:var(--fg);}
+    .btn-icon.restore:hover{color:var(--success);}
+    .btn-icon.del:hover{color:var(--danger);}
+    .btn-sm{padding:3px 8px;font-size:11px;}
+
+    /* TRASH HEADER */
+    .trash-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .list-label{font-size:11px;font-weight:600;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.05em;}
+
+    /* BULK ACTION BAR */
+    .bulk-bar{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--bg-selected);border-bottom:1px solid var(--accent);flex-shrink:0;}
+    .bulk-bar.hidden{display:none;}
+    .bulk-label{font-size:12px;font-weight:500;flex:1;}
+
+    /* NOTE ROWS */
+    .notes-scroll{flex:1;overflow-y:auto;}
+    .trash-row{display:flex;align-items:flex-start;padding:10px 16px;border-bottom:1px solid var(--border);gap:10px;position:relative;}
+    .trash-row:hover{background:var(--bg-hover);}
+    .trash-row.checked{background:rgba(9,71,113,.25);}
+    .row-check{width:16px;height:16px;border:1px solid var(--border);border-radius:3px;flex-shrink:0;margin-top:3px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--bg-input);}
+    .row-check.on{background:var(--accent);border-color:var(--accent);}
+    .row-content{flex:1;min-width:0;}
+    .row-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px;}
+    .row-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .row-expiry{font-size:11px;white-space:nowrap;flex-shrink:0;}
+    .expiry-soon{color:var(--danger);}
+    .expiry-mid{color:var(--warning);}
+    .expiry-late{color:var(--fg-muted);}
+    .row-preview{font-size:12px;color:var(--fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;}
+    .row-tags{display:flex;gap:4px;flex-wrap:wrap;}
+    .tag-c{font-size:11px;color:var(--fg-muted);background:var(--bg-input);padding:1px 6px;border-radius:3px;}
+    .row-actions{display:flex;gap:2px;flex-shrink:0;opacity:0;margin-top:2px;}
+    .trash-row:hover .row-actions{opacity:1;}
+
+    /* EMPTY / SKELETON */
+    .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--fg-muted);font-size:13px;padding:40px;}
+    .empty-icon{color:var(--fg-disabled);}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .skel{background:var(--bg-hover);border-radius:4px;animation:pulse 1.5s infinite;}
+    .skel-row{height:76px;display:block;border-bottom:1px solid var(--border);}
+
+    /* OVERLAY / DIALOG */
+    .overlay{position:fixed;inset:0;background:var(--bg-overlay);display:flex;align-items:center;justify-content:center;z-index:100;}
+    .overlay.hidden{display:none;}
+    .dialog{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:24px;width:440px;display:flex;flex-direction:column;gap:16px;}
+    .dialog-title{font-size:16px;font-weight:600;}
+    .dialog-body{font-size:13px;color:var(--fg-muted);line-height:1.5;}
+    .dialog-footer{display:flex;justify-content:flex-end;gap:8px;}
+
+    /* CHAT */
+    .chat{width:var(--chat);background:var(--bg-base);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+    .chat.hidden{display:none;}
+    .chat-header{height:var(--tabbar);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--bg-tab);flex-shrink:0;}
+    .chat-title{font-size:12px;font-weight:500;color:var(--fg-muted);}
+    .chat-empty-msg{flex:1;display:flex;align-items:center;justify-content:center;color:var(--fg-muted);font-size:13px;}
+    .chat-input{border-top:1px solid var(--border);padding:12px;flex-shrink:0;}
+    .input-wrap{display:flex;align-items:flex-end;gap:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:7px 10px;}
+    .chat-ta{flex:1;background:transparent;border:none;outline:none;color:var(--fg);font-size:13px;font-family:var(--font);resize:none;min-height:20px;}
+    .chat-ta::placeholder{color:var(--fg-muted);}
+    .send-btn{width:28px;height:28px;background:var(--accent);border:none;border-radius:4px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+    /* PROTOTYPE HELPER */
+    .view-switcher{position:fixed;bottom:12px;left:60px;z-index:50;display:flex;gap:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:4px;}
+    .vs-btn{padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;border:none;font-family:var(--font);background:transparent;color:var(--fg-muted);}
+    .vs-btn.on{background:var(--accent);color:#fff;}
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ══ SIDEBAR ══ -->
+  <nav class="sidebar">
+    <div class="sidebar-top">
+      <div class="logo">N</div>
+
+      <div class="nav-icon" title="Все заметки" onclick="location.href='app.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+
+      <div class="nav-icon" title="Поиск" onclick="location.href='search.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      </div>
+
+      <div class="nav-icon" title="Теги" onclick="location.href='tags.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+          <line x1="7" y1="7" x2="7.01" y2="7"/>
+        </svg>
+      </div>
+
+      <div class="nav-icon" title="AI-чат" onclick="toggleChat()">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span class="badge">2</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="nav-icon active" title="Корзина">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="sidebar-bot">
+      <div class="divider"></div>
+      <div class="nav-icon" title="Администрирование" onclick="location.href='admin.html'">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div class="nav-icon" title="Сменить тему">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      </div>
+      <div class="nav-icon" title="Профиль"><div class="avatar">R</div></div>
+    </div>
+  </nav>
+
+  <!-- ══ MAIN ══ -->
+  <div class="main">
+
+    <!-- TAB BAR -->
+    <div class="tabbar">
+      <div class="tab" onclick="location.href='app.html'">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+        Все заметки
+        <span class="tab-close">×</span>
+      </div>
+      <div class="tab active">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+        Корзина
+        <span class="tab-close">×</span>
+      </div>
+    </div>
+
+    <!-- ── VIEW: TRASH WITH ITEMS (2 SELECTED) ── -->
+    <div class="view active" id="view-selected">
+      <div class="trash-header">
+        <span class="list-label">Корзина · 5 заметок</span>
+        <button class="btn btn-danger-ghost btn-sm" onclick="document.getElementById('dlgClear').classList.remove('hidden')">Очистить корзину</button>
+      </div>
+
+      <!-- Bulk action bar (shown when items selected) -->
+      <div class="bulk-bar" id="bulkBar">
+        <span class="bulk-label">2 выбрано</span>
+        <button class="btn btn-ghost btn-sm">↩ Восстановить</button>
+        <button class="btn btn-danger btn-sm" onclick="document.getElementById('dlgBulkDelete').classList.remove('hidden')">✕ Удалить навсегда</button>
+      </div>
+
+      <div class="notes-scroll">
+
+        <!-- Row 1: checked -->
+        <div class="trash-row checked">
+          <div class="row-check on">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="row-content">
+            <div class="row-top">
+              <span class="row-title">Старые заметки по Docker</span>
+              <span class="row-expiry expiry-soon">Удалится через 3 дня</span>
+            </div>
+            <div class="row-preview">Устаревшие команды docker-compose v2, инструкции по установке на Ubuntu 20.04...</div>
+            <div class="row-tags"><span class="tag-c">#docker</span><span class="tag-c">#backend</span></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-icon restore" title="Восстановить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/>
+              </svg>
+            </button>
+            <button class="btn-icon del" title="Удалить навсегда" onclick="document.getElementById('dlgDelete').classList.remove('hidden')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 2: checked -->
+        <div class="trash-row checked">
+          <div class="row-check on">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="row-content">
+            <div class="row-top">
+              <span class="row-title">Черновик README</span>
+              <span class="row-expiry expiry-mid">Удалится через 8 дней</span>
+            </div>
+            <div class="row-preview">Первый черновик README для открытого репозитория. Описание проекта, установка...</div>
+            <div class="row-tags"></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-icon restore" title="Восстановить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/>
+              </svg>
+            </button>
+            <button class="btn-icon del" title="Удалить навсегда">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 3: not checked -->
+        <div class="trash-row">
+          <div class="row-check"></div>
+          <div class="row-content">
+            <div class="row-top">
+              <span class="row-title">Тест производительности pgvector</span>
+              <span class="row-expiry expiry-mid">Удалится через 12 дней</span>
+            </div>
+            <div class="row-preview">Нагрузочное тестирование индекса IVFFlat vs HNSW при 100k векторах размерностью 1536...</div>
+            <div class="row-tags"><span class="tag-c">#postgresql</span><span class="tag-c">#rag</span></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-icon restore" title="Восстановить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/>
+              </svg>
+            </button>
+            <button class="btn-icon del" title="Удалить навсегда">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 4: not checked -->
+        <div class="trash-row">
+          <div class="row-check"></div>
+          <div class="row-content">
+            <div class="row-top">
+              <span class="row-title">Без названия</span>
+              <span class="row-expiry expiry-late">Удалится через 26 дней</span>
+            </div>
+            <div class="row-preview">Начало содержимого заметки...</div>
+            <div class="row-tags"></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-icon restore" title="Восстановить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/>
+              </svg>
+            </button>
+            <button class="btn-icon del" title="Удалить навсегда">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 5: not checked, just deleted -->
+        <div class="trash-row">
+          <div class="row-check"></div>
+          <div class="row-content">
+            <div class="row-top">
+              <span class="row-title">Заметки с митапа PyCon 2025</span>
+              <span class="row-expiry expiry-late">Удалится через 30 дней</span>
+            </div>
+            <div class="row-preview">Доклады по asyncio, паттернам DDD, использованию FastAPI в production...</div>
+            <div class="row-tags"><span class="tag-c">#python</span><span class="tag-c">#backend</span></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-icon restore" title="Восстановить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/>
+              </svg>
+            </button>
+            <button class="btn-icon del" title="Удалить навсегда">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── VIEW: NO SELECTION ── -->
+    <div class="view" id="view-nosel">
+      <div class="trash-header">
+        <span class="list-label">Корзина · 5 заметок</span>
+        <button class="btn btn-danger-ghost btn-sm" onclick="document.getElementById('dlgClear').classList.remove('hidden')">Очистить корзину</button>
+      </div>
+      <div class="notes-scroll">
+        <div class="trash-row">
+          <div class="row-check"></div>
+          <div class="row-content">
+            <div class="row-top">
+              <span class="row-title">Старые заметки по Docker</span>
+              <span class="row-expiry expiry-soon">Удалится через 3 дня</span>
+            </div>
+            <div class="row-preview">Устаревшие команды docker-compose v2, инструкции по установке на Ubuntu 20.04...</div>
+            <div class="row-tags"><span class="tag-c">#docker</span><span class="tag-c">#backend</span></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-icon restore" title="Восстановить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/>
+              </svg>
+            </button>
+            <button class="btn-icon del" title="Удалить навсегда" onclick="document.getElementById('dlgDelete').classList.remove('hidden')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="trash-row">
+          <div class="row-check"></div>
+          <div class="row-content">
+            <div class="row-top"><span class="row-title">Черновик README</span><span class="row-expiry expiry-mid">Удалится через 8 дней</span></div>
+            <div class="row-preview">Первый черновик README для открытого репозитория...</div>
+            <div class="row-tags"></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-icon restore" title="Восстановить"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/></svg></button>
+            <button class="btn-icon del" title="Удалить навсегда"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+        </div>
+        <div class="trash-row">
+          <div class="row-check"></div>
+          <div class="row-content">
+            <div class="row-top"><span class="row-title">Тест производительности pgvector</span><span class="row-expiry expiry-mid">Удалится через 12 дней</span></div>
+            <div class="row-preview">Нагрузочное тестирование индекса IVFFlat vs HNSW...</div>
+            <div class="row-tags"><span class="tag-c">#postgresql</span></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-icon restore" title="Восстановить"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/></svg></button>
+            <button class="btn-icon del" title="Удалить навсегда"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: EMPTY ── -->
+    <div class="view" id="view-empty">
+      <div class="trash-header">
+        <span class="list-label">Корзина · 0 заметок</span>
+      </div>
+      <div class="empty-state">
+        <svg class="empty-icon ic" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+        <div>Корзина пуста</div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: LOADING ── -->
+    <div class="view" id="view-loading">
+      <div class="trash-header">
+        <span class="list-label">Корзина</span>
+      </div>
+      <div class="notes-scroll">
+        <div class="skel skel-row" style="display:block;"></div>
+        <div class="skel skel-row" style="display:block;opacity:.85;"></div>
+        <div class="skel skel-row" style="display:block;opacity:.7;"></div>
+        <div class="skel skel-row" style="display:block;opacity:.5;"></div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ══ CHAT (hidden by default) ══ -->
+  <aside class="chat hidden" id="chatPanel">
+    <div class="chat-header">
+      <span class="chat-title">Nocturn AI</span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm">+ Новый чат</button>
+        <button class="btn btn-ghost btn-sm">История ▾</button>
+      </div>
+    </div>
+    <div class="chat-empty-msg">Задайте вопрос о ваших заметках</div>
+    <div class="chat-input">
+      <div class="input-wrap">
+        <textarea class="chat-ta" rows="1" placeholder="Сообщение..."></textarea>
+        <button class="send-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+</div><!-- /shell -->
+
+<!-- ══ DIALOG: DELETE ONE ══ -->
+<div class="overlay hidden" id="dlgDelete">
+  <div class="dialog">
+    <div class="dialog-title">Удалить заметку навсегда?</div>
+    <div class="dialog-body">Заметка «Старые заметки по Docker» будет удалена безвозвратно. Это действие невозможно отменить.</div>
+    <div class="dialog-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('dlgDelete').classList.add('hidden')">Отмена</button>
+      <button class="btn btn-danger" onclick="document.getElementById('dlgDelete').classList.add('hidden')">Удалить навсегда</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DIALOG: BULK DELETE ══ -->
+<div class="overlay hidden" id="dlgBulkDelete">
+  <div class="dialog">
+    <div class="dialog-title">Удалить 2 заметки навсегда?</div>
+    <div class="dialog-body">Выбранные заметки будут удалены безвозвратно. Это действие невозможно отменить.</div>
+    <div class="dialog-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('dlgBulkDelete').classList.add('hidden')">Отмена</button>
+      <button class="btn btn-danger" onclick="document.getElementById('dlgBulkDelete').classList.add('hidden')">Удалить навсегда</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DIALOG: CLEAR ALL ══ -->
+<div class="overlay hidden" id="dlgClear">
+  <div class="dialog">
+    <div class="dialog-title">Очистить корзину?</div>
+    <div class="dialog-body">Все 5 заметок из корзины будут удалены безвозвратно. Это действие невозможно отменить.</div>
+    <div class="dialog-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('dlgClear').classList.add('hidden')">Отмена</button>
+      <button class="btn btn-danger" onclick="document.getElementById('dlgClear').classList.add('hidden')">Удалить всё</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PROTOTYPE HELPER ══ -->
+<div class="view-switcher">
+  <button class="vs-btn on" data-view="selected" onclick="switchView('selected')">С выбором</button>
+  <button class="vs-btn" data-view="nosel" onclick="switchView('nosel')">Без выбора</button>
+  <button class="vs-btn" data-view="empty" onclick="switchView('empty')">Пусто</button>
+  <button class="vs-btn" data-view="loading" onclick="switchView('loading')">Загрузка</button>
+  <button class="vs-btn" onclick="document.getElementById('dlgDelete').classList.toggle('hidden')" style="color:var(--danger)">Диалог</button>
+  <button class="vs-btn" onclick="toggleChat()" style="color:var(--accent)">Чат</button>
+</div>
+
+<script>
+  const views = ['selected','nosel','empty','loading'];
+  function switchView(v) {
+    views.forEach(id => document.getElementById('view-'+id).classList.toggle('active', id===v));
+    document.querySelectorAll('.vs-btn[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view===v));
+  }
+  function toggleChat() {
+    document.getElementById('chatPanel').classList.toggle('hidden');
+  }
+</script>
+</body>
+</html>

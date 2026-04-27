@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Nocturn — Ошибка</title>
+  <style>
+    :root {
+      --bg-base:#1e1e1e; --bg-card:#252526;
+      --fg:#cccccc; --fg-muted:#858585; --fg-disabled:#555;
+      --border:#454545; --accent:#007acc; --danger:#f44747;
+      --font:'Inter',system-ui,sans-serif; --mono:'JetBrains Mono','Fira Code',monospace;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font);font-size:13px;color:var(--fg);background:var(--bg-base);
+         height:100vh;display:flex;align-items:center;justify-content:center;}
+    .wrap{display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;
+          padding:40px;max-width:480px;}
+    .icon{font-size:40px;line-height:1;}
+    .title{font-size:18px;font-weight:600;}
+    .sub{font-size:13px;color:var(--fg-muted);line-height:1.6;}
+    .btn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:8px 20px;
+         background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;
+         font-weight:500;cursor:pointer;font-family:var(--font);}
+    .btn:hover{opacity:.9;}
+    .detail-toggle{font-size:11px;color:var(--fg-muted);cursor:pointer;text-decoration:underline;
+                   text-underline-offset:2px;margin-top:4px;}
+    .detail-box{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;
+                padding:12px 14px;width:100%;text-align:left;font-family:var(--mono);
+                font-size:11px;color:var(--danger);line-height:1.6;max-height:160px;overflow-y:auto;}
+    .detail-box.hidden{display:none;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="icon">⚠</div>
+    <div class="title">Что-то пошло не так</div>
+    <div class="sub">В приложении произошла непредвиденная ошибка. Попробуйте перезагрузить страницу. Если ошибка повторяется — обратитесь в поддержку.</div>
+    <button class="btn" onclick="location.href='app.html'">↺ Перезагрузить страницу</button>
+    <span class="detail-toggle" onclick="document.getElementById('detail').classList.toggle('hidden')">Показать детали ошибки</span>
+    <div class="detail-box hidden" id="detail">TypeError: Cannot read properties of undefined (reading 'map')
+    at NoteList (NoteList.tsx:47:28)
+    at renderWithHooks (react-dom.development.js:14985:18)
+    at mountIndeterminateComponent (react-dom.development.js:17811:13)
+    at beginWork (react-dom.development.js:19049:16)</div>
+  </div>
+</body>
+</html>

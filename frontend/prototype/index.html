@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Nocturn — Design System</title>
+  <style>
+    :root {
+      --bg-base: #1e1e1e; --bg-sidebar: #252526; --bg-tab: #2d2d2d;
+      --bg-input: #3c3c3c; --bg-hover: #2a2d2e; --bg-selected: #094771;
+      --bg-card: #252526;
+      --fg: #cccccc; --fg-muted: #858585; --fg-disabled: #555555;
+      --border: #454545; --accent: #007acc; --danger: #f44747;
+      --success: #4ec9b0; --warning: #cca700;
+      --font: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg-base); color: var(--fg); font-size: 13px; padding: 40px; }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+    h2 { font-size: 14px; font-weight: 600; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .06em; margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+    p { color: var(--fg-muted); font-size: 12px; margin-top: 4px; line-height: 1.5; }
+    .subtitle { color: var(--fg-muted); font-size: 13px; margin-bottom: 32px; }
+
+    /* NAV */
+    .nav { display: flex; gap: 8px; margin: 24px 0 0; flex-wrap: wrap; }
+    .nav a {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 6px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      color: var(--fg); font-size: 13px; text-decoration: none; font-weight: 500;
+      transition: border-color .15s, background .15s;
+    }
+    .nav a:hover { border-color: var(--accent); background: var(--bg-hover); }
+    .nav a span { font-size: 11px; color: var(--fg-muted); font-weight: 400; }
+
+    /* GRID */
+    .grid { display: grid; gap: 16px; }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .grid-auto { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+
+    /* COLORS */
+    .swatch { border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .swatch-color { height: 56px; }
+    .swatch-info { padding: 8px; background: var(--bg-card); }
+    .swatch-name { font-size: 11px; font-weight: 600; color: var(--fg); }
+    .swatch-value { font-size: 10px; color: var(--fg-muted); font-family: var(--font-mono); }
+
+    /* TYPOGRAPHY */
+    .type-row { display: flex; align-items: baseline; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .type-meta { width: 120px; flex-shrink: 0; font-size: 11px; color: var(--fg-muted); font-family: var(--font-mono); }
+    .type-sample { color: var(--fg); }
+
+    /* BUTTONS */
+    .btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 4px; font-size: 12px; font-weight: 500;
+      cursor: pointer; border: none; font-family: var(--font);
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 3px 8px; font-size: 11px; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* INPUTS */
+    .input {
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--fg); font-family: var(--font);
+      font-size: 13px; padding: 5px 10px; outline: none; width: 220px;
+    }
+    .input:focus { border-color: var(--accent); box-shadow: 0 0 0 1px #007acc33; }
+    .input.error { border-color: var(--danger); box-shadow: 0 0 0 1px #f4474733; }
+    .input-error-msg { font-size: 11px; color: var(--danger); margin-top: 4px; }
+    .input-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+    .input-label { font-size: 12px; color: var(--fg-muted); }
+
+    /* CHIPS */
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 4px; font-size: 12px; color: var(--fg);
+    }
+    .chip-remove { color: var(--fg-muted); cursor: pointer; font-size: 13px; line-height: 1; }
+    .chip-accent { background: var(--bg-selected); border-color: var(--accent); }
+
+    /* TOASTS */
+    .toast {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg-card); margin-bottom: 8px; max-width: 320px;
+      border-left: 3px solid transparent;
+    }
+    .toast-error { border-left-color: var(--danger); }
+    .toast-success { border-left-color: var(--success); }
+    .toast-warning { border-left-color: var(--warning); }
+    .toast-info { border-left-color: var(--accent); }
+    .toast-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+    .toast-body { font-size: 12px; color: var(--fg-muted); }
+    .toast-close { color: var(--fg-muted); cursor: pointer; font-size: 16px; margin-left: auto; flex-shrink: 0; line-height: 1; }
+
+    /* BADGE */
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 16px; height: 16px; padding: 0 3px;
+      background: var(--accent); color: #fff; font-size: 10px;
+      font-weight: 700; border-radius: 8px;
+    }
+
+    /* PROPOSAL */
+    .proposal-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-left: 3px solid var(--accent); border-radius: 6px;
+      padding: 10px 12px; max-width: 360px;
+    }
+    .proposal-type { font-size: 11px; color: var(--fg-muted); margin-bottom: 4px; }
+    .proposal-link { font-size: 12px; font-weight: 600; color: #4daafc; }
+    .proposal-summary { font-size: 12px; color: var(--fg-muted); margin: 4px 0 8px; }
+
+    /* SKELETON */
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .skeleton { background: var(--bg-hover); border-radius: 4px; animation: pulse 1.5s infinite; }
+
+    /* DIFF */
+    .diff-add { background: #1e3a1e; }
+    .diff-remove { background: #3a1e1e; color: var(--fg-muted); text-decoration: line-through; }
+    .diff-line { font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; }
+
+    /* LIGHT THEME DEMO */
+    .light-demo {
+      background: #fff; color: #1f1f1f; border: 1px solid #d4d4d4;
+      border-radius: 8px; padding: 20px;
+    }
+    .light-demo .swatch-info { background: #f8f8f8; }
+    .light-demo .swatch-name { color: #1f1f1f; }
+    .light-demo .swatch-value { color: #6e6e6e; }
+
+    .section { margin-bottom: 48px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+    .col { display: flex; flex-direction: column; gap: 8px; }
+  </style>
+</head>
+<body>
+
+  <h1>Nocturn</h1>
+  <div class="subtitle">Design System · Prototype Index</div>
+
+  <!-- NAVIGATION -->
+  <div class="nav">
+    <a href="app.html">
+      🖥 Основное приложение
+      <span>редактор · чат · proposals</span>
+    </a>
+    <a href="auth.html">
+      🔐 Аутентификация
+      <span>вход · регистрация · сброс пароля</span>
+    </a>
+    <a href="search.html">
+      🔍 Поиск
+      <span>ключевые слова · семантический · skeleton</span>
+    </a>
+    <a href="tags.html">
+      🏷 Теги
+      <span>список · создание · переименование · удаление</span>
+    </a>
+    <a href="trash.html">
+      🗑 Корзина
+      <span>удалённые заметки · восстановление · очистка</span>
+    </a>
+    <a href="admin.html">
+      🛡 Администрирование
+      <span>пользователи · статистика · блокировка · роли</span>
+    </a>
+    <a href="splash.html">
+      ⏳ Загрузка
+      <span>splash-экран · авторизация</span>
+    </a>
+    <a href="404.html">
+      🔎 404
+      <span>страница не найдена</span>
+    </a>
+    <a href="error.html">
+      ⚠ Ошибка
+      <span>error boundary · stack trace</span>
+    </a>
+  </div>
+
+  <!-- COLORS DARK -->
+  <h2>Цвета — тёмная тема</h2>
+  <div class="grid grid-auto">
+    <div class="swatch"><div class="swatch-color" style="background:#1e1e1e;"></div><div class="swatch-info"><div class="swatch-name">bg-base</div><div class="swatch-value">#1e1e1e</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#252526;"></div><div class="swatch-info"><div class="swatch-name">bg-sidebar / bg-card</div><div class="swatch-value">#252526</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#2d2d2d;"></div><div class="swatch-info"><div class="swatch-name">bg-tab-bar</div><div class="swatch-value">#2d2d2d</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#3c3c3c;"></div><div class="swatch-info"><div class="swatch-name">bg-input</div><div class="swatch-value">#3c3c3c</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#2a2d2e;"></div><div class="swatch-info"><div class="swatch-name">bg-hover</div><div class="swatch-value">#2a2d2e</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#094771;"></div><div class="swatch-info"><div class="swatch-name">bg-selected</div><div class="swatch-value">#094771</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#007acc;"></div><div class="swatch-info"><div class="swatch-name">accent</div><div class="swatch-value">#007acc</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#f44747;"></div><div class="swatch-info"><div class="swatch-name">danger</div><div class="swatch-value">#f44747</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#4ec9b0;"></div><div class="swatch-info"><div class="swatch-name">success</div><div class="swatch-value">#4ec9b0</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#cca700;"></div><div class="swatch-info"><div class="swatch-name">warning</div><div class="swatch-value">#cca700</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#cccccc;"></div><div class="swatch-info"><div class="swatch-name">fg-default</div><div class="swatch-value">#cccccc</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#858585;"></div><div class="swatch-info"><div class="swatch-name">fg-muted</div><div class="swatch-value">#858585</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#454545;border:1px solid #666;"></div><div class="swatch-info"><div class="swatch-name">border</div><div class="swatch-value">#454545</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#1e3a1e;"></div><div class="swatch-info"><div class="swatch-name">diff-add-bg</div><div class="swatch-value">#1e3a1e</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#3a1e1e;"></div><div class="swatch-info"><div class="swatch-name">diff-remove-bg</div><div class="swatch-value">#3a1e1e</div></div></div>
+  </div>
+
+  <!-- COLORS LIGHT -->
+  <h2>Цвета — светлая тема</h2>
+  <div class="light-demo">
+    <div class="grid grid-auto">
+      <div class="swatch" style="border-color:#d4d4d4"><div class="swatch-color" style="background:#ffffff;border-bottom:1px solid #d4d4d4;"></div><div class="swatch-info" style="background:#f8f8f8"><div class="swatch-name" style="color:#1f1f1f">bg-base</div><div class="swatch-value" style="color:#6e6e6e">#ffffff</div></div></div>
+      <div class="swatch" style="border-color:#d4d4d4"><div class="swatch-color" style="background:#f3f3f3;"></div><div class="swatch-info" style="background:#f8f8f8"><div class="swatch-name" style="color:#1f1f1f">bg-sidebar</div><div class="swatch-value" style="color:#6e6e6e">#f3f3f3</div></div></div>
+      <div class="swatch" style="border-color:#d4d4d4"><div class="swatch-color" style="background:#ececec;"></div><div class="swatch-info" style="background:#f8f8f8"><div class="swatch-name" style="color:#1f1f1f">bg-tab-bar</div><div class="swatch-value" style="color:#6e6e6e">#ececec</div></div></div>
+      <div class="swatch" style="border-color:#d4d4d4"><div class="swatch-color" style="background:#e8e8e8;"></div><div class="swatch-info" style="background:#f8f8f8"><div class="swatch-name" style="color:#1f1f1f">bg-hover</div><div class="swatch-value" style="color:#6e6e6e">#e8e8e8</div></div></div>
+      <div class="swatch" style="border-color:#d4d4d4"><div class="swatch-color" style="background:#cce5ff;"></div><div class="swatch-info" style="background:#f8f8f8"><div class="swatch-name" style="color:#1f1f1f">bg-selected</div><div class="swatch-value" style="color:#6e6e6e">#cce5ff</div></div></div>
+      <div class="swatch" style="border-color:#d4d4d4"><div class="swatch-color" style="background:#1f1f1f;"></div><div class="swatch-info" style="background:#f8f8f8"><div class="swatch-name" style="color:#1f1f1f">fg-default</div><div class="swatch-value" style="color:#6e6e6e">#1f1f1f</div></div></div>
+      <div class="swatch" style="border-color:#d4d4d4"><div class="swatch-color" style="background:#ddfbe6;border-bottom:1px solid #d4d4d4;"></div><div class="swatch-info" style="background:#f8f8f8"><div class="swatch-name" style="color:#1f1f1f">diff-add-bg</div><div class="swatch-value" style="color:#6e6e6e">#ddfbe6</div></div></div>
+      <div class="swatch" style="border-color:#d4d4d4"><div class="swatch-color" style="background:#ffdce0;border-bottom:1px solid #d4d4d4;"></div><div class="swatch-info" style="background:#f8f8f8"><div class="swatch-name" style="color:#1f1f1f">diff-remove-bg</div><div class="swatch-value" style="color:#6e6e6e">#ffdce0</div></div></div>
+    </div>
+  </div>
+
+  <!-- TYPOGRAPHY -->
+  <h2>Типографика</h2>
+  <div class="section">
+    <div class="type-row"><div class="type-meta">11px / xs</div><div class="type-sample" style="font-size:11px">Подписи, бейджи, счётчики символов</div></div>
+    <div class="type-row"><div class="type-meta">12px / sm</div><div class="type-sample" style="font-size:12px">Вторичный текст, теги, превью заметок, метки кнопок</div></div>
+    <div class="type-row"><div class="type-meta">13px / base</div><div class="type-sample" style="font-size:13px">Основной текст интерфейса — списки, поля, сообщения</div></div>
+    <div class="type-row"><div class="type-meta">14px / md</div><div class="type-sample" style="font-size:14px">Тело сообщений чата, контент заметок в редакторе</div></div>
+    <div class="type-row"><div class="type-meta">16px / lg</div><div class="type-sample" style="font-size:16px; font-weight:600">Заголовки вкладок, заголовок заметки</div></div>
+    <div class="type-row"><div class="type-meta">20px / xl</div><div class="type-sample" style="font-size:20px; font-weight:600">Заголовок попапа профиля</div></div>
+    <div class="type-row"><div class="type-meta">mono / code</div><div class="type-sample" style="font-family:var(--font-mono);font-size:12px;background:var(--bg-input);padding:4px 8px;border-radius:4px;">const chunk = embed(text, 500)</div></div>
+  </div>
+
+  <!-- BUTTONS -->
+  <h2>Кнопки</h2>
+  <div class="section">
+    <div class="btn-row">
+      <button class="btn btn-primary">Primary</button>
+      <button class="btn btn-ghost">Ghost</button>
+      <button class="btn btn-danger">Danger</button>
+      <button class="btn btn-primary" disabled>Disabled</button>
+      <button class="btn btn-ghost" disabled>Disabled</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm">Small Primary</button>
+      <button class="btn btn-ghost btn-sm">Small Ghost</button>
+      <button class="btn btn-danger btn-sm">Small Danger</button>
+    </div>
+  </div>
+
+  <!-- INPUTS -->
+  <h2>Поля ввода</h2>
+  <div class="section row">
+    <div class="col">
+      <div class="input-group">
+        <label class="input-label">Default</label>
+        <input class="input" placeholder="Введите текст...">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Focus (эмуляция)</label>
+        <input class="input" style="border-color:var(--accent);box-shadow:0 0 0 1px #007acc33" value="Активное поле">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Error</label>
+        <input class="input error" value="неверный@email">
+        <div class="input-error-msg">Некорректный формат email</div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Disabled</label>
+        <input class="input" placeholder="Недоступно" disabled style="opacity:.4;cursor:not-allowed">
+      </div>
+    </div>
+  </div>
+
+  <!-- CHIPS -->
+  <h2>Chips (теги, прикреплённые заметки)</h2>
+  <div class="section row">
+    <span class="chip">#rag <span class="chip-remove">×</span></span>
+    <span class="chip">#архитектура <span class="chip-remove">×</span></span>
+    <span class="chip chip-accent">📄 Заметка о RAG <span class="chip-remove">×</span></span>
+    <span class="chip" style="opacity:.5">Disabled</span>
+  </div>
+
+  <!-- BADGES -->
+  <h2>Бейджи</h2>
+  <div class="section row">
+    <span class="badge">2</span>
+    <span class="badge">14</span>
+    <span class="badge" style="background:var(--danger)">!</span>
+    <span class="badge" style="background:var(--success)">✓</span>
+  </div>
+
+  <!-- TOASTS -->
+  <h2>Toast-уведомления</h2>
+  <div class="section">
+    <div class="toast toast-error">
+      <div>
+        <div class="toast-title" style="color:var(--danger)">Ошибка сохранения</div>
+        <div class="toast-body">Не удалось сохранить заметку. Проверьте соединение.</div>
+      </div>
+      <span class="toast-close">×</span>
+    </div>
+    <div class="toast toast-success">
+      <div>
+        <div class="toast-title" style="color:var(--success)">Пароль изменён</div>
+        <div class="toast-body">Новый пароль успешно сохранён.</div>
+      </div>
+      <span class="toast-close">×</span>
+    </div>
+    <div class="toast toast-warning">
+      <div>
+        <div class="toast-title" style="color:var(--warning)">Слишком много запросов</div>
+        <div class="toast-body">Подождите немного перед следующей попыткой.</div>
+      </div>
+      <span class="toast-close">×</span>
+    </div>
+    <div class="toast toast-info">
+      <div>
+        <div class="toast-title" style="color:var(--accent)">Тег удалён</div>
+        <div class="toast-body">Тег «#rag» отвязан от 3 заметок.</div>
+      </div>
+      <span class="toast-close">×</span>
+    </div>
+  </div>
+
+  <!-- PROPOSAL CARD -->
+  <h2>Proposal card</h2>
+  <div class="section row">
+    <div>
+      <h3 style="margin-bottom:8px;color:var(--fg-muted);font-size:11px;text-transform:uppercase">Pending</h3>
+      <div class="proposal-card">
+        <div class="proposal-type">✏ Редактировать заметку</div>
+        <div class="proposal-link">Архитектура RAG-системы</div>
+        <div class="proposal-summary">Добавить раздел «Метрики качества» с описанием precision@k и MRR.</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-primary btn-sm">Принять</button>
+          <button class="btn btn-ghost btn-sm">Отклонить</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 style="margin-bottom:8px;color:var(--fg-muted);font-size:11px;text-transform:uppercase">Applied</h3>
+      <div class="proposal-card" style="border-left-color:var(--success);opacity:.7">
+        <div class="proposal-type">✏ Редактировать заметку</div>
+        <div class="proposal-link">Настройка окружения</div>
+        <div class="proposal-summary">Исправлена команда установки зависимостей.</div>
+        <div style="font-size:11px;color:var(--success);display:flex;align-items:center;gap:4px;">✓ Применено</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIFF VIEW -->
+  <h2>Diff-режим редактора</h2>
+  <div class="section">
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;overflow:hidden;max-width:560px;font-family:var(--font-mono);">
+      <div style="padding:6px 12px;background:var(--bg-tab);border-bottom:1px solid var(--border);font-size:11px;color:var(--fg-muted);">Предлагаемые изменения</div>
+      <div class="diff-line">Pipeline состоит из двух этапов.</div>
+      <div class="diff-line diff-remove">Индексация выполняется синхронно при сохранении.</div>
+      <div class="diff-line diff-add">Индексация выполняется асинхронно через очередь задач.</div>
+      <div class="diff-line">Для поиска используется косинусное сходство.</div>
+      <div class="diff-line diff-add">Метрики качества: precision@k, recall, MRR.</div>
+    </div>
+  </div>
+
+  <!-- SKELETON -->
+  <h2>Skeleton-плейсхолдеры</h2>
+  <div class="section col" style="max-width:400px;gap:10px;">
+    <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;">
+      <div class="skeleton" style="height:14px;width:60%;"></div>
+      <div class="skeleton" style="height:11px;width:90%;"></div>
+      <div class="skeleton" style="height:11px;width:75%;"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;">
+      <div class="skeleton" style="height:14px;width:45%;"></div>
+      <div class="skeleton" style="height:11px;width:85%;"></div>
+    </div>
+  </div>
+
+  <!-- SPACING -->
+  <h2>Отступы</h2>
+  <div class="section row" style="align-items:flex-end;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="width:4px;height:4px;background:var(--accent);border-radius:2px;"></div>
+      <span style="font-size:10px;color:var(--fg-muted)">4px</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="width:8px;height:8px;background:var(--accent);border-radius:2px;"></div>
+      <span style="font-size:10px;color:var(--fg-muted)">8px</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="width:12px;height:12px;background:var(--accent);border-radius:2px;"></div>
+      <span style="font-size:10px;color:var(--fg-muted)">12px</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="width:16px;height:16px;background:var(--accent);border-radius:2px;"></div>
+      <span style="font-size:10px;color:var(--fg-muted)">16px</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="width:24px;height:24px;background:var(--accent);border-radius:2px;"></div>
+      <span style="font-size:10px;color:var(--fg-muted)">24px</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="width:32px;height:32px;background:var(--accent);border-radius:2px;"></div>
+      <span style="font-size:10px;color:var(--fg-muted)">32px</span>
+    </div>
+  </div>
+
+</body>
+</html>

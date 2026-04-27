@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Nocturn — 404</title>
+  <style>
+    :root {
+      --bg-base:#1e1e1e; --fg:#cccccc; --fg-muted:#858585; --fg-disabled:#555;
+      --border:#454545; --accent:#007acc;
+      --font:'Inter',system-ui,sans-serif;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font);font-size:13px;color:var(--fg);background:var(--bg-base);
+         height:100vh;display:flex;align-items:center;justify-content:center;}
+    .wrap{display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;padding:40px;}
+    .code{font-size:72px;font-weight:700;color:var(--fg-disabled);line-height:1;letter-spacing:-2px;}
+    .title{font-size:18px;font-weight:600;color:var(--fg);}
+    .sub{font-size:13px;color:var(--fg-muted);}
+    .btn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:8px 20px;
+         background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;
+         font-weight:500;cursor:pointer;font-family:var(--font);text-decoration:none;}
+    .btn:hover{opacity:.9;}
+    .logo{width:36px;height:36px;background:var(--accent);border-radius:9px;
+          display:flex;align-items:center;justify-content:center;
+          font-weight:700;font-size:20px;color:#fff;margin-bottom:8px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">N</div>
+    <div class="code">404</div>
+    <div class="title">Страница не найдена</div>
+    <div class="sub">Запрошенная страница не существует или была перемещена.</div>
+    <a class="btn" href="app.html">← На главную</a>
+  </div>
+</body>
+</html>
