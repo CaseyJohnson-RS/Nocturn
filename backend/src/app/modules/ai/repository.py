@@ -119,6 +119,7 @@ class AIRepository:
             actions=actions,
             attached_note_ids=attached_note_ids,
             token_estimate=token_estimate,
+            created_at=datetime.now(UTC),
         )
         self.db.add(msg)
         await self.db.flush()
@@ -143,7 +144,7 @@ class AIRepository:
         result = await self.db.execute(
             select(ChatMessage)
             .where(ChatMessage.session_id == session_id)
-            .order_by(ChatMessage.created_at.asc())
+            .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
             .limit(limit)
             .offset(offset),
         )

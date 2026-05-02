@@ -17,6 +17,8 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
 
+import nh3
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.common.exceptions import ConflictError, NotFoundError, ValidationError
@@ -48,6 +50,7 @@ from src.app.modules.ai.tools import (
 from src.app.modules.notes.models import Note
 from src.app.modules.notes.repository import NotesRepository
 from src.app.modules.rag.service import RAGService
+from src.app.modules.tags.repository import TagsRepository
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +73,7 @@ def _estimate_tokens(text: str) -> int:
     return int(len(text) / settings.planner_chars_per_token)
 
 
-def _format_sse_event(payload: dict[str, str], event: str | None = None) -> str:
+def _format_sse_event(payload: dict[str, Any], event: str | None = None) -> str:
     """Format a Server-Sent Event string."""
     parts: list[str] = []
     if event:
@@ -532,7 +535,7 @@ class AIService:
         response_text = "".join(full_content_parts)
         clean_actions = self._clean_actions(actions)
 
-        await self.repo.add_message(
+        saved_msg = await self.repo.add_message(
             session_id=session_id,
             role="assistant",
             content=response_text or "(No text response)",
@@ -545,8 +548,13 @@ class AIService:
             title = content[:100].strip()
             await self.repo.update_session_title(session, title)
 
-        # 6. Done
-        yield _format_sse_event({}, event="ai:done")
+        # 6. Done — include the full saved assistant message so the frontend
+        #    can replace the streaming overlay with the authoritative DB record
+        msg_response = MessageResponse.model_validate(saved_msg)
+        yield _format_sse_event(
+            {"message": msg_response.model_dump(mode="json")},
+            event="ai:done",
+        )
 
     # -----------------------------------------------------------------------
     # Cancel active generation
@@ -610,12 +618,115 @@ class AIService:
         if target.get("status") != "pending":
             raise ConflictError("Proposal already finalized")
 
+        if new_status == "applied":
+            await self._execute_proposal(user_id, target)
+
         target["summary"] = build_summary(target, new_status)
         target["status"] = new_status
         target["data"] = None
 
         msg = await self.repo.update_message_actions(msg, actions)
         return MessageResponse.model_validate(msg)
+
+    async def _execute_proposal(
+        self,
+        user_id: uuid.UUID,
+        proposal: dict[str, Any],
+    ) -> None:
+        """Execute the actual note operation for an applied proposal."""
+        proposal_type = proposal.get("proposal_type", "")
+        note_id_str = proposal.get("note_id")
+        data: dict[str, Any] = proposal.get("data") or {}
+        tags_repo = TagsRepository(self.db)
+
+        if proposal_type == "create_note":
+            title = nh3.clean(data["title"]) if data.get("title") else data.get("title")
+            content = nh3.clean(data["content"]) if data.get("content") else data.get("content")
+            tag_names: list[str] = data.get("tags") or []
+
+            note = await self.notes_repo.create_note(user_id, title, content)
+
+            if tag_names:
+                tag_ids: list[uuid.UUID] = []
+                for name in tag_names:
+                    tag = await tags_repo.get_tag_by_name(user_id, name)
+                    if not tag:
+                        tag = await tags_repo.create_tag(user_id, name)
+                    tag_ids.append(tag.id)
+                if len(tag_ids) > settings.max_tags_per_note:
+                    tag_ids = tag_ids[: settings.max_tags_per_note]
+                await self.notes_repo.set_note_tags(note.id, tag_ids)
+
+            note = await self.notes_repo.get_active_note(note.id, user_id)
+            if note:
+                await self.rag.index_note(note)
+
+        elif proposal_type == "edit_note":
+            if not note_id_str:
+                return
+            try:
+                note_id = uuid.UUID(note_id_str)
+            except ValueError:
+                return
+            note = await self.notes_repo.get_active_note(note_id, user_id)
+            if not note:
+                return
+            title = nh3.clean(data["title"]) if data.get("title") is not None else note.title
+            content = nh3.clean(data["content"]) if data.get("content") is not None else note.content
+            note = await self.notes_repo.update_note(note, title, content)
+            await self.rag.index_note(note)
+
+        elif proposal_type == "delete_note":
+            if not note_id_str:
+                return
+            try:
+                note_id = uuid.UUID(note_id_str)
+            except ValueError:
+                return
+            note = await self.notes_repo.get_active_note(note_id, user_id)
+            if not note:
+                return
+            await self.notes_repo.soft_delete_note(note, datetime.now(UTC))
+            await self.rag.remove_note(note.id)
+
+        elif proposal_type == "add_tags":
+            if not note_id_str:
+                return
+            try:
+                note_id = uuid.UUID(note_id_str)
+            except ValueError:
+                return
+            note = await self.notes_repo.get_active_note(note_id, user_id)
+            if not note:
+                return
+            tag_names_to_add: list[str] = data.get("tags") or []
+            new_ids: list[uuid.UUID] = []
+            for name in tag_names_to_add:
+                tag = await tags_repo.get_tag_by_name(user_id, name)
+                if not tag:
+                    tag = await tags_repo.create_tag(user_id, name)
+                new_ids.append(tag.id)
+            seen: dict[str, uuid.UUID] = {str(t.id): t.id for t in (note.tags or [])}
+            for tid in new_ids:
+                seen[str(tid)] = tid
+            merged = list(seen.values())
+            if len(merged) > settings.max_tags_per_note:
+                merged = merged[: settings.max_tags_per_note]
+            await self.notes_repo.set_note_tags(note.id, merged)
+
+        elif proposal_type == "remove_tags":
+            if not note_id_str:
+                return
+            try:
+                note_id = uuid.UUID(note_id_str)
+            except ValueError:
+                return
+            note = await self.notes_repo.get_active_note(note_id, user_id)
+            if not note:
+                return
+            names_to_remove = {n.lower() for n in (data.get("tags") or [])}
+            remaining = [t.id for t in (note.tags or []) if t.name.lower() not in names_to_remove]
+            await self.notes_repo.set_note_tags(note.id, remaining)
 
     # -----------------------------------------------------------------------
     # Bulk confirmation
@@ -750,9 +861,13 @@ class AIService:
             n=n,
             proposals_count=len(proposals),
         )
-        await self.repo.update_message_actions(msg, msg.actions)
+        msg = await self.repo.update_message_actions(msg, msg.actions)
 
-        yield _format_sse_event({}, event="ai:done")
+        msg_response = MessageResponse.model_validate(msg)
+        yield _format_sse_event(
+            {"message": msg_response.model_dump(mode="json")},
+            event="ai:done",
+        )
 
     async def _run_executor_batch(
         self,
