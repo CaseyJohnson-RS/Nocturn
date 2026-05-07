@@ -1,6 +1,9 @@
 import { useUIStore, tabKey, type TabId, type SidebarPanel } from '@/stores/ui';
 import { lazy, Suspense } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { notesApi } from '@/api/notes';
 import { t } from '@/i18n';
+import type { NoteResponse } from '@/types/api';
 
 const NoteList    = lazy(() => import('@/features/notes/NoteList'));
 const SearchPanel = lazy(() => import('@/features/notes/SearchPanel'));
@@ -9,19 +12,32 @@ const TrashPanel  = lazy(() => import('@/features/notes/TrashPanel'));
 const NoteEditor  = lazy(() => import('@/features/notes/NoteEditor'));
 const AdminPanel  = lazy(() => import('@/features/admin/AdminPanel'));
 
-function tabLabel(tab: TabId): string {
-  if (tab.type === 'panel') {
-    const s = t();
-    const labels: Record<SidebarPanel, string> = {
-      notes:  s.notes.notes,
-      search: s.notes.search,
-      tags:   s.notes.tags,
-      trash:  s.notes.trash,
-      admin:  s.admin.admin,
-    };
-    return labels[tab.panel];
-  }
-  return tab.type === 'diff' ? 'Diff' : 'Заметка';
+function panelTabLabel(panel: SidebarPanel): string {
+  const s = t();
+  const labels: Record<SidebarPanel, string> = {
+    notes:  s.notes.notes,
+    search: s.notes.search,
+    tags:   s.notes.tags,
+    trash:  s.notes.trash,
+    admin:  s.admin.admin,
+  };
+  return labels[panel];
+}
+
+function NoteTabLabel({ noteId }: { noteId: string }) {
+  const s = t();
+  const { data } = useQuery<NoteResponse>({
+    queryKey: ['note', noteId],
+    queryFn: () => notesApi.get(noteId),
+    staleTime: Infinity,
+  });
+  return <>{data?.title || s.notes.untitled}</>;
+}
+
+function TabLabel({ tab }: { tab: TabId }) {
+  if (tab.type === 'panel') return <>{panelTabLabel(tab.panel)}</>;
+  if (tab.type === 'note') return <NoteTabLabel noteId={tab.id} />;
+  return <>Diff</>;
 }
 
 export function CenterPanel() {
@@ -47,7 +63,7 @@ export function CenterPanel() {
                   ${isActive ? 'bg-bg-base text-fg border-t border-t-accent' : 'text-fg-muted hover:bg-bg-hover hover:text-fg'}`}
                 onClick={() => setActiveTab(tab)}
               >
-                <span>{tabLabel(tab)}</span>
+                <span><TabLabel tab={tab} /></span>
                 <button
                   className="text-fg-disabled hover:text-fg text-[14px] leading-none"
                   onClick={(e) => { e.stopPropagation(); closeTab(tab); }}
@@ -64,7 +80,7 @@ export function CenterPanel() {
       <div className="flex-1 overflow-hidden">
         <Suspense fallback={null}>
           {activeTab === null && <EmptyState />}
-          {activeTab?.type === 'note' && <NoteEditor noteId={activeTab.id} />}
+          {activeTab?.type === 'note' && <NoteEditor key={activeTab.id} noteId={activeTab.id} />}
           {activeTab?.type === 'diff' && <EmptyState />}
           {activeTab?.type === 'panel' && <PanelView panel={activeTab.panel} />}
         </Suspense>

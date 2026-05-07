@@ -38,6 +38,9 @@ export function ProposalCard({ proposal, sessionId, messageId }: ProposalCardPro
     onSuccess: (msg) => {
       replaceMessage(msg);
       void qc.invalidateQueries({ queryKey: ['notes'] });
+      if (proposal.note_id) {
+        void qc.invalidateQueries({ queryKey: ['note', proposal.note_id] });
+      }
       if (proposal.proposal_type === 'add_tags' || proposal.proposal_type === 'remove_tags') {
         void qc.invalidateQueries({ queryKey: ['tags'] });
       }

@@ -14,6 +14,7 @@ import { t } from '@/i18n';
 import type { NoteResponse, TagResponse } from '@/types/api';
 
 const AUTOSAVE_DELAY = 1500;
+const TITLE_SAVE_DELAY = 400;
 
 interface NoteEditorProps {
   noteId: string;
@@ -28,6 +29,7 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
   const { data: note } = useQuery<NoteResponse>({
     queryKey: ['note', noteId],
     queryFn: () => notesApi.get(noteId),
+    staleTime: Infinity,
   });
 
   // Lazy initializers: when the tab is re-opened, React Query already has the
@@ -40,6 +42,7 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
   const [conflict, setConflict] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
   const [tagFocused, setTagFocused] = useState(false);
+  const [editorMode, setEditorMode] = useState<'editor' | 'split' | 'preview'>('split');
 
   // syncedNoteIdRef: tracks which note ID we last synced local state from.
   // Lets the effect below skip resets triggered by autosaves (same note, new
@@ -49,6 +52,9 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorDivRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // Suppresses the CM update listener during programmatic dispatches so loading
+  // note content never triggers a spurious autosave or dirty-state flip.
+  const programmaticUpdateRef = useRef(false);
   // Refs keep the CodeMirror closure (created once on mount) always fresh
   const titleRef = useRef(title);
   titleRef.current = title;
@@ -148,10 +154,10 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
     [noteId, qc],
   );
 
-  function scheduleSave(t2: string, c: string) {
+  function scheduleSave(t2: string, c: string, delay = AUTOSAVE_DELAY) {
     setDirty(true);
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void save(t2, c), AUTOSAVE_DELAY);
+    saveTimer.current = setTimeout(() => void save(t2, c), delay);
   }
 
   // ── CodeMirror (always mounted so useEffect([]) can attach on first render) ─
@@ -166,7 +172,7 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
           EditorView.lineWrapping,
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
+            if (update.docChanged && !programmaticUpdateRef.current) {
               const newContent = update.state.doc.toString();
               setContent(newContent);
               scheduleSave(titleRef.current, newContent);
@@ -181,7 +187,7 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
             '.cm-scroller': { overflow: 'auto' },
             '.cm-content': {
               caretColor: 'var(--color-fg)',
-              padding: '28px 36px',
+              padding: '24px 32px',
               minHeight: '100%',
             },
           }),
@@ -193,14 +199,17 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
     return () => { view.destroy(); viewRef.current = null; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync content into CM when note switches
+  // Sync content into CM when note switches — flag suppresses the update
+  // listener so loading the document never triggers a spurious autosave.
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const newDoc = note?.content ?? '';
     const current = view.state.doc.toString();
     if (current !== newDoc) {
+      programmaticUpdateRef.current = true;
       view.dispatch({ changes: { from: 0, to: current.length, insert: newDoc } });
+      programmaticUpdateRef.current = false;
     }
   }, [note?.id]);
 
@@ -241,57 +250,29 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
   return (
     <div className="h-full flex flex-col">
 
-      {/* ── Toolbar: save-dot + attach button, right-aligned ── */}
-      <div
-        className="flex-shrink-0 flex items-center justify-end gap-4 px-6 border-b border-border"
-        style={{ height: 'var(--tabbar-h)', background: 'var(--color-bg-tab)' }}
-      >
-        {note && (
-          <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass}`} />
-            {dotLabel && (
-              <span className="text-[11px] text-fg-muted">{dotLabel}</span>
-            )}
-          </div>
-        )}
-
-        <button
-          className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
-            isAttached
-              ? 'border-accent text-accent bg-accent/10'
-              : atLimit
-              ? 'border-border text-fg-disabled cursor-not-allowed opacity-50'
-              : 'border-border text-fg-muted hover:text-fg hover:border-border-focus'
-          }`}
-          onClick={handleAttach}
-          disabled={!isAttached && atLimit}
-          title={!isAttached && atLimit ? s.notes.attachLimit : undefined}
-        >
-          📎 {isAttached ? s.notes.detachFromChat : s.notes.attachToChat}
-        </button>
-      </div>
-
       {/* ── Editor head: title + tags ── */}
       {note ? (
-        <div className="flex-shrink-0 px-7 pt-5 pb-4 border-b border-border">
-          {/* Title */}
+        <div className="flex-shrink-0 border-b border-border" style={{ padding: '20px 32px 14px' }}>
           <input
-            className="w-full bg-transparent border-none outline-none text-[20px] font-semibold text-fg placeholder:text-fg-disabled leading-tight"
+            className="w-full bg-transparent border-none outline-none text-[20px] font-semibold text-fg placeholder:text-fg-disabled leading-snug"
             placeholder={s.notes.untitled}
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
-              scheduleSave(e.target.value, contentRef.current);
+              qc.setQueryData<NoteResponse>(['note', noteId], (old) =>
+                old ? { ...old, title: e.target.value } : old,
+              );
+              scheduleSave(e.target.value, contentRef.current, TITLE_SAVE_DELAY);
             }}
             onKeyDown={handleTitleKeyDown}
           />
 
-          {/* Tags row */}
-          <div className="flex flex-wrap items-center gap-2 mt-3">
+          <div className="flex flex-wrap items-center" style={{ marginTop: '12px', gap: '6px' }}>
             {note.tags.map((tag) => (
               <span
                 key={tag.id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 bg-bg-input border border-border rounded text-[12px] text-fg"
+                className="inline-flex items-center gap-1 bg-bg-input border border-border rounded text-[12px] text-fg"
+                style={{ padding: '3px 10px' }}
               >
                 #{tag.name}
                 <button
@@ -303,7 +284,6 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
               </span>
             ))}
 
-            {/* Inline tag autocomplete — looks like "+ тег" plain text */}
             <div className="relative">
               <input
                 className="text-[12px] text-fg-muted bg-transparent outline-none border-none placeholder:text-fg-disabled w-16 cursor-text"
@@ -349,23 +329,91 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
           </div>
         </div>
       ) : (
-        /* Loading skeleton */
-        <div className="flex-shrink-0 px-7 pt-5 pb-4 border-b border-border">
-          <div className="h-7 w-56 bg-bg-hover rounded animate-pulse mb-3" />
+        <div className="flex-shrink-0 border-b border-border" style={{ padding: '20px 32px 14px' }}>
+          <div className="h-7 w-56 bg-bg-hover rounded animate-pulse" style={{ marginBottom: '12px' }} />
           <div className="h-4 w-28 bg-bg-hover rounded animate-pulse" />
         </div>
       )}
 
-      {/* ── Split: raw CodeMirror (left) | rendered preview (right) ──
-          Both always in the DOM — editorDivRef must be present on mount
-          so the useEffect([]) can attach CodeMirror correctly.          ── */}
+      {/* ── Toolbar: mode toggle (left) + save status + attach (right) ── */}
+      <div
+        className="flex-shrink-0 flex items-center justify-between border-b border-border"
+        style={{ padding: '7px 32px', background: 'var(--color-bg-tab)' }}
+      >
+        {/* Mode toggle buttons */}
+        <div className="flex items-center" style={{ gap: '2px' }}>
+          {([
+            { mode: 'editor',  title: 'Editor only',
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> },
+            { mode: 'split',   title: 'Split view',
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="9" height="18" rx="1"/><rect x="13" y="3" width="9" height="18" rx="1"/></svg> },
+            { mode: 'preview', title: 'Preview only',
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> },
+          ] as const).map(({ mode, title, icon }) => (
+            <button
+              key={mode}
+              title={title}
+              onClick={() => setEditorMode(mode)}
+              className={`flex items-center justify-center rounded transition-colors ${
+                editorMode === mode
+                  ? 'text-fg bg-bg-hover'
+                  : 'text-fg-disabled hover:text-fg hover:bg-bg-hover'
+              }`}
+              style={{ width: '26px', height: '26px' }}
+            >
+              {icon}
+            </button>
+          ))}
+        </div>
+
+        {/* Save status + attach */}
+        <div className="flex items-center" style={{ gap: '10px' }}>
+          {note && (
+            <div className="flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass}`} />
+              {dotLabel && (
+                <span className="text-[11px] text-fg-muted">{dotLabel}</span>
+              )}
+            </div>
+          )}
+          <button
+            className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+              isAttached
+                ? 'border-accent text-accent bg-accent/10'
+                : atLimit
+                ? 'border-border text-fg-disabled cursor-not-allowed opacity-50'
+                : 'border-border text-fg-muted hover:text-fg hover:border-border-focus'
+            }`}
+            onClick={handleAttach}
+            disabled={!isAttached && atLimit}
+            title={!isAttached && atLimit ? s.notes.attachLimit : undefined}
+          >
+            📎 {isAttached ? s.notes.detachFromChat : s.notes.attachToChat}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Content: CodeMirror + preview, always both in DOM ──
+          Panes collapse to flex-basis 0 (never unmounted) so CodeMirror's
+          mount-time DOM attachment is always satisfied.                   ── */}
       <div className="flex-1 flex min-h-0">
 
-        {/* Raw markdown editor */}
-        <div ref={editorDivRef} className="flex-1 overflow-hidden border-r border-border" />
+        <div
+          ref={editorDivRef}
+          className="overflow-hidden"
+          style={{
+            flex: editorMode === 'preview' ? '0 0 0%' : '1 1 0%',
+            borderRight: editorMode === 'split' ? '1px solid var(--color-border)' : 'none',
+          }}
+        />
 
-        {/* Live rendered preview */}
-        <div className="flex-1 overflow-y-auto px-9 py-7">
+        <div
+          className="overflow-y-auto"
+          style={{
+            flex: editorMode === 'editor' ? '0 0 0%' : '1 1 0%',
+            padding: editorMode !== 'editor' ? '24px 32px' : '0',
+          }}
+        >
           <div className="note-body">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {content || ''}

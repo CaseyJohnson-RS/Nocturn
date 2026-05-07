@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { aiApi, confirmBulkStream } from '@/api/ai';
 import { useChatStore } from '@/stores/chat';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,7 @@ interface PendingConfirmCardProps {
 
 export function PendingConfirmCard({ confirmation, sessionId }: PendingConfirmCardProps) {
   const s = t();
+  const qc = useQueryClient();
   const [streaming, setStreaming] = useState(false);
 
   const dismissed = confirmation.status !== 'pending';
@@ -41,6 +42,12 @@ export function PendingConfirmCard({ confirmation, sessionId }: PendingConfirmCa
         const res = await aiApi.getMessages(sessionId, { limit: 100 });
         useChatStore.getState().setMessages(res.items);
       } catch { /* keep existing messages on network failure */ }
+      // Invalidate every note touched by the bulk op so editors show fresh content
+      for (const id of confirmation.note_ids) {
+        void qc.invalidateQueries({ queryKey: ['note', id] });
+      }
+      void qc.invalidateQueries({ queryKey: ['notes'] });
+      void qc.invalidateQueries({ queryKey: ['tags'] });
       setStreaming(false);
     }
   }
