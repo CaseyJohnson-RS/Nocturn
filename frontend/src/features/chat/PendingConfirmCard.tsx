@@ -54,8 +54,12 @@ export function PendingConfirmCard({ confirmation, sessionId }: PendingConfirmCa
 
   return (
     <div className={`rounded-md border-l-[3px] border-warning px-3 py-2.5 mt-2 text-[12px] bg-bg-card border border-border ${dismissed ? 'opacity-60' : ''}`}>
-      <div className="text-[11px] text-fg-muted mb-1">
-        🔄 {s.chat.bulkOp} · {confirmation.note_ids.length} заметок
+      <div className="flex items-center gap-1 text-[11px] text-fg-muted mb-1">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 .49-3.86"/>
+        </svg>
+        {s.chat.bulkOp} · {s.chat.bulkNotes.replace('{count}', String(confirmation.note_ids.length))}
       </div>
       <div className="text-fg mb-2">{confirmation.summary}</div>
 

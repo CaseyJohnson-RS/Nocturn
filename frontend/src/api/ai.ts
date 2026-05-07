@@ -46,9 +46,6 @@ export const aiApi = {
   cancelGeneration: (sessionId: string) =>
     api.post(`/api/ai/sessions/${sessionId}/cancel`),
 
-  confirmBulk: (sessionId: string, confirmationId: string) =>
-    sendSSERequest(`/api/ai/sessions/${sessionId}/confirm/${confirmationId}`, 'POST'),
-
   dismissBulk: (sessionId: string, confirmationId: string) =>
     api.post<AIMessageResponse>(`/api/ai/sessions/${sessionId}/dismiss/${confirmationId}`).then((r) => r.data),
 };
@@ -60,6 +57,26 @@ export interface SSEFrame {
   data: SSETextDelta | Proposal | PendingConfirmation | SSEError | SSEDone;
 }
 
+function* parseChunks(buffer: string): Generator<SSEFrame> {
+  const chunks = buffer.split('\n\n');
+  for (const chunk of chunks) {
+    if (!chunk.trim()) continue;
+    let event = '';
+    let dataLine = '';
+    for (const line of chunk.split('\n')) {
+      if (line.startsWith('event: ')) event = line.slice(7).trim();
+      else if (line.startsWith('data: ')) dataLine = line.slice(6).trim();
+    }
+    if (event && dataLine) {
+      try {
+        yield { event: event as SSEEventType, data: JSON.parse(dataLine) as SSEFrame['data'] };
+      } catch {
+        // malformed frame — skip
+      }
+    }
+  }
+}
+
 async function* parseSSE(response: Response): AsyncGenerator<SSEFrame> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
@@ -67,28 +84,17 @@ async function* parseSSE(response: Response): AsyncGenerator<SSEFrame> {
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      // Flush decoder and process any remaining buffered event
+      buffer += decoder.decode();
+      if (buffer.trim()) yield* parseChunks(buffer + '\n\n');
+      break;
+    }
 
     buffer += decoder.decode(value, { stream: true });
     const chunks = buffer.split('\n\n');
     buffer = chunks.pop() ?? '';
-
-    for (const chunk of chunks) {
-      if (!chunk.trim()) continue;
-      let event = '';
-      let dataLine = '';
-      for (const line of chunk.split('\n')) {
-        if (line.startsWith('event: ')) event = line.slice(7).trim();
-        else if (line.startsWith('data: ')) dataLine = line.slice(6).trim();
-      }
-      if (event && dataLine) {
-        try {
-          yield { event: event as SSEEventType, data: JSON.parse(dataLine) as SSEFrame['data'] };
-        } catch {
-          // malformed frame — skip
-        }
-      }
-    }
+    yield* parseChunks(chunks.join('\n\n'));
   }
 }
 

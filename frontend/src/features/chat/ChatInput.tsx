@@ -54,7 +54,7 @@ export function ChatInput({ onSend, disabled, onStop }: ChatInputProps) {
   const isOverLimit = charCount > 4000;
 
   return (
-    <div className="flex-shrink-0 border-t border-border px-3 py-3">
+    <div className="flex-shrink-0 border-t border-border" style={{ padding: '14px' }}>
       {/* Attached chips */}
       {attachedNotes.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
@@ -63,7 +63,11 @@ export function ChatInput({ onSend, disabled, onStop }: ChatInputProps) {
               key={n.id}
               className="inline-flex items-center gap-1 px-2 py-0.5 bg-bg-selected rounded text-[11px] text-fg-link"
             >
-              📄 {n.title ?? s.notes.untitled}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              {n.title ?? s.notes.untitled}
               <button
                 className="text-fg-muted hover:text-fg ml-0.5"
                 onClick={() => detachNote(n.id)}
@@ -77,8 +81,9 @@ export function ChatInput({ onSend, disabled, onStop }: ChatInputProps) {
 
       {/* Input row */}
       <div
-        className={`flex items-end gap-2 bg-bg-input border rounded-md px-2.5 py-1.5
+        className={`flex items-center gap-2 bg-bg-input border rounded-md
           ${isOverLimit ? 'border-danger' : 'border-border focus-within:border-border-focus'}`}
+        style={{ padding: '8px 12px' }}
       >
         <textarea
           ref={taRef}
@@ -94,14 +99,14 @@ export function ChatInput({ onSend, disabled, onStop }: ChatInputProps) {
 
         {/* Char hint */}
         {charCount > 3500 && (
-          <span className={`text-[10px] flex-shrink-0 mb-0.5 ${isOverLimit ? 'text-danger' : 'text-fg-muted'}`}>
+          <span className={`text-[10px] flex-shrink-0 ${isOverLimit ? 'text-danger' : 'text-fg-muted'}`}>
             {s.chat.maxCharsHint.replace('{count}', String(charCount))}
           </span>
         )}
 
         {/* Send / Stop button */}
         <button
-          className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded text-white mb-0.5
+          className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded text-white
             ${isGenerating ? 'bg-danger hover:opacity-90' : 'bg-accent hover:opacity-90 disabled:opacity-40'}`}
           disabled={!isGenerating && (disabled || !text.trim() || isOverLimit)}
           onClick={isGenerating ? onStop : submit}

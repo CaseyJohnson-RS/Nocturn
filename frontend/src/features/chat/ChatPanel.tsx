@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { aiApi, sendMessage } from '@/api/ai';
 import { useChatStore } from '@/stores/chat';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { t } from '@/i18n';
-import type { AIMessageResponse, Action, Proposal, PendingConfirmation } from '@/types/api';
+import type { AIMessageResponse, Action, Proposal, PendingConfirmation, SessionResponse } from '@/types/api';
 
 export default function ChatPanel() {
   const s = t();
+  const queryClient = useQueryClient();
   const {
     activeSessionId, messages, isGenerating, streamingContent, streamingActions,
     setActiveSession, setMessages, addMessage, setGenerating, appendDelta,
@@ -16,9 +17,13 @@ export default function ChatPanel() {
   } = useChatStore();
 
   const msgsEndRef = useRef<HTMLDivElement>(null);
+  const skipNextLoadRef = useRef(false);
+  const historyRef = useRef<HTMLDivElement>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
 
   // ── Sessions list ──────────────────────────────────────────────────────────
   const { data: sessionsData, refetch: refetchSessions } = useQuery({
@@ -27,27 +32,26 @@ export default function ChatPanel() {
   });
   const sessions = sessionsData?.items ?? [];
 
-  // ── Create initial session on mount ───────────────────────────────────────
-  const createSessionMut = useMutation({
-    mutationFn: (dismissId?: string) =>
-      aiApi.createSession({ dismiss_session_id: dismissId ?? null }),
-    onSuccess: (session) => {
-      setActiveSession(session.id);
-      void refetchSessions();
-    },
-  });
-
+  // ── Activate most-recent session once the list loads; never auto-create ──
   useEffect(() => {
-    if (!activeSessionId && sessions.length > 0) {
-      setActiveSession(sessions[0].id);
-    } else if (!activeSessionId && sessions.length === 0) {
-      createSessionMut.mutate(undefined);
+    if (activeSessionId || !sessionsData) return;
+    if (sessions.length > 0) {
+      const id = sessions[0].id;
+      const timer = setTimeout(() => {
+        // Guard: user may have started a new session during the delay
+        if (!useChatStore.getState().activeSessionId) setActiveSession(id);
+      }, 600);
+      return () => clearTimeout(timer);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionsData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load messages when session changes ────────────────────────────────────
   useEffect(() => {
     if (!activeSessionId) return;
+    if (skipNextLoadRef.current) {
+      skipNextLoadRef.current = false;
+      return;
+    }
     aiApi.getMessages(activeSessionId, { limit: 100 }).then((res) => {
       setMessages(res.items);
     });
@@ -57,6 +61,19 @@ export default function ChatPanel() {
   useEffect(() => {
     msgsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, streamingContent]);
+
+  // ── Close history dropdown on outside click ───────────────────────────────
+  const closeHistory = useCallback(() => { setHistoryOpen(false); setMenuOpenId(null); setMenuPos(null); }, []);
+  useEffect(() => {
+    if (!historyOpen) return;
+    function onMouseDown(e: MouseEvent) {
+      if (historyRef.current && !historyRef.current.contains(e.target as Node)) {
+        closeHistory();
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [historyOpen]);
 
   // ── Has pending proposals (blocks input) ──────────────────────────────────
   const hasPending = messages.filter(Boolean).some((m) =>
@@ -69,15 +86,32 @@ export default function ChatPanel() {
 
   // ── Send message ──────────────────────────────────────────────────────────
   async function handleSend(content: string, attachedNoteIds: string[]) {
-    if (!activeSessionId || isGenerating) return;
+    if (isGenerating) return;
 
+    // Lazily create a session on the very first message
+    let sessionId = activeSessionId;
+    let isNewSession = false;
+    if (!sessionId) {
+      try {
+        const session = await aiApi.createSession({ dismiss_session_id: null });
+        isNewSession = true;
+        skipNextLoadRef.current = true;
+        setActiveSession(session.id);
+        void refetchSessions();
+        sessionId = session.id;
+      } catch {
+        return;
+      }
+    }
+
+    const sid = sessionId!;
     const controller = new AbortController();
     setGenerating(true, controller);
 
     // Optimistic user message
     const optimistic: AIMessageResponse = {
       id: `opt-${Date.now()}`,
-      session_id: activeSessionId,
+      session_id: sid,
       role: 'user',
       content,
       actions: null,
@@ -86,20 +120,14 @@ export default function ChatPanel() {
     };
     addMessage(optimistic);
 
-    try {
-      const gen = sendMessage(
-        activeSessionId,
-        { content, attached_note_ids: attachedNoteIds },
-        controller.signal,
-      );
+    const payload = { content, ...(attachedNoteIds.length ? { attached_note_ids: attachedNoteIds } : {}) };
 
+    async function runStream() {
+      const gen = sendMessage(sid, payload, controller.signal);
       for await (const frame of gen) {
         switch (frame.event) {
           case 'ai:text_delta':
             appendDelta((frame.data as { delta: string }).delta);
-            // Yield a macrotask so React can flush and the browser can paint
-            // before the next token — this makes streaming visually progressive
-            // even when the server delivers multiple tokens in one TCP chunk.
             await new Promise<void>((resolve) => setTimeout(resolve, 0));
             break;
           case 'ai:proposal':
@@ -109,30 +137,86 @@ export default function ChatPanel() {
             pushStreamingAction(frame.data as Action);
             break;
           case 'ai:done': {
-            // Fetch the authoritative message list so we always show server state,
-            // regardless of what the ai:done payload contains.  The streaming
-            // overlay stays visible during the fetch, then disappears once messages
-            // are loaded — no flash, no stale-closure issues.
             try {
-              const res = await aiApi.getMessages(activeSessionId!, { limit: 100 });
-              setMessages(res.items);
+              const res = await aiApi.getMessages(sid, { limit: 100 });
+              if (res.items.length > 0) {
+                setMessages(res.items);
+              } else {
+                // Server race: DB not yet committed — preserve streamed content as a local message
+                const { streamingContent, streamingActions } = useChatStore.getState();
+                if (streamingContent || streamingActions.length > 0) {
+                  addMessage({
+                    id: `ai-${Date.now()}`,
+                    session_id: sid,
+                    role: 'assistant',
+                    content: streamingContent,
+                    actions: streamingActions.length > 0 ? streamingActions : null,
+                    attached_note_ids: null,
+                    created_at: new Date().toISOString(),
+                  });
+                }
+              }
             } catch {
-              // On error keep whatever messages we have
+              // keep existing messages on network failure
             }
             clearStreaming();
-            void refetchSessions(); // update title in session list
+            setGenerating(false);
+            void refetchSessions();
             break;
           }
           case 'ai:error':
             console.error('AI error', frame.data);
             clearStreaming();
+            setGenerating(false);
             break;
         }
       }
+    }
+
+    try {
+      await runStream();
     } catch (err: unknown) {
-      if (err instanceof Error && err.name !== 'AbortError') {
-        console.error('SSE error', err);
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      if (isAbort) { clearStreaming(); return; }
+
+      // New sessions sometimes need a moment to initialize on the server — retry once
+      if (isNewSession && !controller.signal.aborted) {
+        try {
+          await new Promise<void>((r) => setTimeout(r, 1000));
+          if (!controller.signal.aborted) {
+            clearStreaming();
+            await runStream();
+            return;
+          }
+        } catch (retryErr: unknown) {
+          const isRetryAbort = retryErr instanceof Error && retryErr.name === 'AbortError';
+          if (!isRetryAbort) {
+            console.error('SSE error (retry)', retryErr);
+            addMessage({
+              id: `err-${Date.now()}`,
+              session_id: sid,
+              role: 'assistant',
+              content: s.chat.generationError,
+              actions: null,
+              attached_note_ids: null,
+              created_at: new Date().toISOString(),
+            });
+          }
+          clearStreaming();
+          return;
+        }
       }
+
+      console.error('SSE error', err);
+      addMessage({
+        id: `err-${Date.now()}`,
+        session_id: sid,
+        role: 'assistant',
+        content: s.chat.generationError,
+        actions: null,
+        attached_note_ids: null,
+        created_at: new Date().toISOString(),
+      });
       clearStreaming();
     } finally {
       setGenerating(false);
@@ -148,10 +232,14 @@ export default function ChatPanel() {
   const deleteSessionMut = useMutation({
     mutationFn: (id: string) => aiApi.deleteSession(id),
     onSuccess: (_, id) => {
-      void refetchSessions();
-      if (activeSessionId === id) {
-        setActiveSession(null);
-        createSessionMut.mutate(undefined);
+      queryClient.setQueryData(['ai-sessions'], (old: typeof sessionsData) => {
+        if (!old) return old;
+        return { ...old, items: old.items.filter((s) => s.id !== id) };
+      });
+      if (useChatStore.getState().activeSessionId === id) {
+        useChatStore.getState().cancel();
+        const next = sessions.find((sess) => sess.id !== id);
+        setActiveSession(next?.id ?? null);
       }
     },
   });
@@ -159,7 +247,13 @@ export default function ChatPanel() {
   const renameSessionMut = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) =>
       aiApi.updateSession(id, { title }),
-    onSuccess: () => { void refetchSessions(); setRenamingId(null); },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['ai-sessions'], (old: typeof sessionsData) => {
+        if (!old) return old;
+        return { ...old, items: old.items.map((s) => (s.id === updated.id ? updated : s)) };
+      });
+      setRenamingId(null);
+    },
   });
 
   function commitRename(id: string) {
@@ -167,7 +261,6 @@ export default function ChatPanel() {
     else setRenamingId(null);
   }
 
-  const activeSession = sessions.find((s2) => s2.id === activeSessionId);
 
   // Build streaming message (shown while generating)
   const streamingMsg: AIMessageResponse | null = isGenerating
@@ -187,129 +280,177 @@ export default function ChatPanel() {
       className="flex flex-col flex-shrink-0 border-l border-border overflow-hidden"
       style={{ width: 'var(--chat-w)', background: 'var(--color-bg-base)' }}
     >
-      {/* Header */}
-      <div
-        className="flex-shrink-0 flex items-center justify-between px-3 border-b border-border relative"
-        style={{ height: 'var(--tabbar-h)', background: 'var(--color-bg-tab)' }}
-      >
-        <button
-          className="flex items-center gap-1.5 text-[12px] font-medium text-fg-muted hover:text-fg"
-          onClick={() => setHistoryOpen((v) => !v)}
+      {/* Header + history panel wrapper */}
+      <div ref={historyRef} className="flex-shrink-0 relative">
+        {/* Header */}
+        <div
+          className="flex items-center justify-between border-b border-border"
+          style={{ height: 'var(--tabbar-h)', background: 'var(--color-bg-tab)', padding: '0 20px' }}
         >
-          💬 {activeSession?.title ?? s.chat.chat}
-          <span className="text-[10px]">▾</span>
-        </button>
-        <button
-          className="text-[12px] text-fg-muted hover:text-fg px-1.5 py-0.5 rounded hover:bg-bg-hover"
-          title={s.chat.newChat}
-          onClick={() => createSessionMut.mutate(activeSessionId ?? undefined)}
-        >
-          +
-        </button>
+          <span className="text-[12px] font-medium text-fg-muted">
+            {s.chat.assistant}
+          </span>
 
-        {/* Session history dropdown */}
+          <div className="flex items-center gap-1.5">
+            {activeSessionId && (
+              <button
+                className="text-[12px] font-medium text-fg rounded-md border border-border hover:bg-bg-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ padding: '3px 10px' }}
+                disabled={isGenerating}
+                onClick={() => { setActiveSession(null); setMessages([]); closeHistory(); }}
+              >
+                + {s.chat.newChat}
+              </button>
+            )}
+            <button
+              className="flex items-center gap-1 text-[12px] font-medium text-fg hover:text-fg rounded-md border border-border hover:bg-bg-hover"
+              style={{ padding: '3px 10px' }}
+              onClick={() => setHistoryOpen((v) => !v)}
+            >
+              {s.chat.chatHistory}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Session history panel — absolutely positioned so it overlays messages without shifting layout */}
         {historyOpen && (
-          <div className="absolute top-full right-1 w-72 bg-bg-card border border-border rounded-md z-30 shadow-xl overflow-hidden"
-            style={{ top: 'calc(100% + 2px)' }}
+          <div
+            className="absolute left-0 right-0 border-b border-border z-30 overflow-y-auto"
+            style={{ top: '100%', background: 'var(--color-bg-tab)', maxHeight: '320px' }}
+            onClick={() => { setMenuOpenId(null); setMenuPos(null); }}
           >
             {sessions.length === 0 && (
-              <div className="px-3 py-4 text-[12px] text-fg-muted text-center">
+              <div className="text-[12px] text-fg-muted text-center" style={{ padding: '16px' }}>
                 {s.chat.noSessions}
               </div>
             )}
             {sessions.map((sess) => (
               <div
                 key={sess.id}
-                className={`flex items-center gap-2 px-3 py-2 border-b border-border cursor-pointer hover:bg-bg-hover
+                className={`flex items-center gap-2 cursor-pointer border-b border-border last:border-b-0 hover:bg-bg-hover
                   ${sess.id === activeSessionId ? 'bg-bg-selected/30' : ''}`}
+                style={{ padding: '9px 12px' }}
               >
                 {renamingId === sess.id ? (
-                  <input
-                    autoFocus
-                    className="flex-1 bg-bg-input border border-border-focus rounded px-1.5 py-0.5 text-[12px] text-fg outline-none"
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={() => commitRename(sess.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitRename(sess.id);
-                      if (e.key === 'Escape') setRenamingId(null);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  />
+                  <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      autoFocus
+                      className="w-full bg-bg-input border border-border-focus rounded text-[12px] text-fg outline-none"
+                      style={{ padding: '4px 8px' }}
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => commitRename(sess.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitRename(sess.id);
+                        if (e.key === 'Escape') setRenamingId(null);
+                      }}
+                    />
+                    <div className="text-[10px] text-fg-muted" style={{ marginTop: '3px' }}>
+                      {s.chat.renameHint}
+                    </div>
+                  </div>
                 ) : (
                   <span
                     className="flex-1 text-[12px] truncate"
-                    onClick={() => { setActiveSession(sess.id); setHistoryOpen(false); }}
+                    onClick={() => { setActiveSession(sess.id); closeHistory(); }}
                   >
                     {sess.title ?? s.chat.chat}
                   </span>
                 )}
-                <span className="text-[11px] text-fg-muted flex-shrink-0">
-                  {sess.last_message_at
-                    ? new Date(sess.last_message_at).toLocaleDateString([], { day: 'numeric', month: 'short' })
-                    : ''}
-                </span>
-                <button
-                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-fg-muted hover:text-fg rounded hover:bg-bg-hover text-[14px]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setRenamingId(sess.id);
-                    setRenameValue(sess.title ?? '');
-                  }}
-                >
-                  ✏
-                </button>
-                <button
-                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-fg-muted hover:text-danger rounded hover:bg-danger/10 text-[14px]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm(s.chat.deleteSessionConfirm.replace('{title}', sess.title ?? s.chat.chat))) {
-                      deleteSessionMut.mutate(sess.id);
-                    }
-                  }}
-                >
-                  🗑
-                </button>
+
+                {renamingId !== sess.id && (
+                  <>
+                    <span className="text-[11px] text-fg-muted flex-shrink-0">
+                      {sess.last_message_at
+                        ? new Date(sess.last_message_at).toLocaleDateString([], { day: 'numeric', month: 'short' })
+                        : ''}
+                    </span>
+
+                    <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="w-6 h-6 flex items-center justify-center text-fg-muted hover:text-fg rounded hover:bg-bg-hover text-[16px] leading-none"
+                        onClick={(e) => {
+                          if (menuOpenId === sess.id) {
+                            setMenuOpenId(null);
+                            setMenuPos(null);
+                          } else {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setMenuPos({ top: rect.bottom + 2, right: window.innerWidth - rect.right });
+                            setMenuOpenId(sess.id);
+                          }
+                        }}
+                      >
+                        ⋯
+                      </button>
+                      {menuOpenId === sess.id && menuPos && (
+                        <div
+                          className="fixed bg-bg-card border border-border rounded shadow-lg z-50"
+                          style={{ top: menuPos.top, right: menuPos.right, minWidth: '140px', padding: '4px 0' }}
+                        >
+                          <button
+                            className="w-full text-left text-[12px] text-fg hover:bg-bg-hover"
+                            style={{ padding: '6px 12px' }}
+                            onClick={() => { setRenamingId(sess.id); setRenameValue(sess.title ?? ''); setMenuOpenId(null); }}
+                          >
+                            {s.chat.renameSession}
+                          </button>
+                          <button
+                            className="w-full text-left text-[12px] text-danger hover:bg-danger/10"
+                            style={{ padding: '6px 12px' }}
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              if (confirm(s.chat.deleteSessionConfirm.replace('{title}', sess.title ?? s.chat.chat))) {
+                                closeHistory();
+                                deleteSessionMut.mutate(sess.id);
+                              }
+                            }}
+                          >
+                            {s.chat.deleteSession}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            sessionId={activeSessionId ?? ''}
+      {/* Messages / empty state */}
+      <div className="flex-1 overflow-y-auto flex flex-col min-h-0" style={{ padding: '20px 16px', gap: '20px' }}>
+        {activeSessionId === null ? (
+          <ChatEmptyState
+            sessions={sessions}
+            onSelectSession={(id) => setActiveSession(id)}
           />
-        ))}
+        ) : (
+          <>
+            {messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                sessionId={activeSessionId}
+              />
+            ))}
 
-        {/* Streaming assistant message */}
-        {streamingMsg && (
-          <MessageBubble
-            message={streamingMsg}
-            sessionId={activeSessionId ?? ''}
-            isStreaming
-            streamingContent={streamingContent}
-          />
+            {streamingMsg && (
+              <MessageBubble
+                message={streamingMsg}
+                sessionId={activeSessionId}
+                isStreaming
+                streamingContent={streamingContent}
+              />
+            )}
+
+
+            <div ref={msgsEndRef} />
+          </>
         )}
-
-        {/* Thinking indicator */}
-        {isGenerating && !streamingContent && (
-          <div className="flex flex-col gap-1 items-start">
-            <span className="text-[11px] text-fg-muted px-1">{s.chat.assistant}</span>
-            <div className="flex items-center gap-1.5 px-3 py-2 bg-bg-card border border-border rounded-lg text-[12px] text-fg-muted">
-              <span className="animate-bounce" style={{ animationDelay: '0ms' }}>●</span>
-              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>●</span>
-              <span className="animate-bounce" style={{ animationDelay: '300ms' }}>●</span>
-              <span className="ml-1">{s.chat.thinking}</span>
-            </div>
-          </div>
-        )}
-
-        <div ref={msgsEndRef} />
       </div>
 
       {/* Pending proposals hint */}
@@ -326,5 +467,63 @@ export default function ChatPanel() {
         onStop={handleStop}
       />
     </aside>
+  );
+}
+
+// ── Empty state ────────────────────────────────────────────────────────────────
+
+function ChatEmptyState({
+  sessions,
+  onSelectSession,
+}: {
+  sessions: SessionResponse[];
+  onSelectSession: (id: string) => void;
+}) {
+  const s = t();
+  const recent = sessions.slice(0, 3);
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center" style={{ gap: '28px' }}>
+
+      {/* Heading */}
+      <div className="flex flex-col items-center text-center" style={{ gap: '6px' }}>
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+          className="text-fg-disabled" style={{ marginBottom: '4px' }}>
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span className="text-[14px] font-medium text-fg">{s.chat.emptyHeading}</span>
+        <span className="text-[12px] text-fg-muted">{s.chat.emptySubtitle}</span>
+      </div>
+
+      {/* Recent sessions */}
+      {recent.length > 0 && (
+        <div style={{ width: '100%', maxWidth: '260px' }}>
+          <div className="text-[10px] text-fg-disabled uppercase tracking-widest" style={{ marginBottom: '8px' }}>
+            {s.chat.recentChats}
+          </div>
+          {recent.map((sess) => (
+            <button
+              key={sess.id}
+              onClick={() => onSelectSession(sess.id)}
+              className="w-full flex items-center rounded-md hover:bg-bg-hover transition-colors text-left"
+              style={{ padding: '7px 8px', gap: '8px', marginBottom: '2px' }}
+            >
+              <span className="flex-1 text-[12px] text-fg truncate">
+                {sess.title ?? s.chat.chat}
+              </span>
+              <span className="text-[11px] text-fg-disabled flex-shrink-0">
+                {sess.last_message_at
+                  ? new Date(sess.last_message_at).toLocaleDateString([], { day: 'numeric', month: 'short' })
+                  : ''}
+              </span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                className="text-fg-disabled flex-shrink-0">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

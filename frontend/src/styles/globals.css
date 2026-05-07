@@ -147,6 +147,8 @@ body {
   font-size: 11px;
   line-height: 1.6;
 }
+.md-content a { color: var(--color-fg-link); text-decoration: none; }
+.md-content a:hover { text-decoration: underline; }
 .md-content strong { font-weight: 600; }
 .md-content em { font-style: italic; }
 .md-content blockquote {
@@ -230,19 +232,53 @@ body {
 
 /* ── Note link chips ── */
 .note-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--color-fg-link);
+  display: inline;
+  color: #4ec9b0;
+  background: rgba(78, 201, 176, 0.1);
+  border: 1px solid rgba(78, 201, 176, 0.3);
+  border-radius: 3px;
+  padding: 3px 10px;
   cursor: pointer;
-  font-size: inherit;
-  border-bottom: 1px solid transparent;
+  font-size: 0.9em;
+  font-weight: 500;
   white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.note-link:hover { border-bottom-color: var(--color-fg-link); }
+.note-link:hover {
+  background: rgba(78, 201, 176, 0.2);
+  border-color: rgba(78, 201, 176, 0.6);
+  color: #6edfc6;
+}
 .note-link.dead {
   color: var(--color-fg-disabled);
+  background: transparent;
+  border-color: transparent;
   cursor: default;
   text-decoration: line-through;
   pointer-events: none;
+}
+
+/* ── Streaming cursor ── */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 0.85em;
+  background: currentColor;
+  border-radius: 1px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursor-blink 0.9s step-end infinite;
+}
+
+/* ── Streaming content fade-in ── */
+@keyframes stream-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.streaming-bubble {
+  animation: stream-in 0.18s ease-out;
 }

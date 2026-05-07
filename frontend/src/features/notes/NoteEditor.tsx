@@ -377,7 +377,7 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
             </div>
           )}
           <button
-            className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+            className={`text-[11px] rounded border transition-colors ${
               isAttached
                 ? 'border-accent text-accent bg-accent/10'
                 : atLimit
@@ -387,6 +387,7 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
             onClick={handleAttach}
             disabled={!isAttached && atLimit}
             title={!isAttached && atLimit ? s.notes.attachLimit : undefined}
+            style={{ padding: '4px 10px' }}
           >
             📎 {isAttached ? s.notes.detachFromChat : s.notes.attachToChat}
           </button>
