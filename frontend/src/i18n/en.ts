@@ -29,6 +29,7 @@ export const en: Strings = {
     invalidToken: 'The link is invalid or has expired.',
     emailConfirmed: 'Email confirmed. You can now sign in.',
     passwordChanged: 'Password changed.',
+    wrongPassword: 'Incorrect current password.',
   },
 
   notes: {
@@ -76,6 +77,7 @@ export const en: Strings = {
     select: 'Select',
     selected: '{count} selected',
     deleteMultipleConfirm: 'Delete {count} notes? They will be moved to trash.',
+    restoreMultipleConfirm: 'Restore {count} notes?',
     keywordSection: 'By keywords',
     recentSearches: 'Recent',
   },
@@ -86,6 +88,8 @@ export const en: Strings = {
     deleteTagConfirm: 'Delete tag "{name}"? It will be removed from all notes.',
     noTags: 'No tags',
     notesWithTag: '{count} notes',
+    deleteMultipleConfirm: 'Delete {count} tags? They will be removed from all notes.',
+    tagExists: 'A tag with this name already exists.',
   },
 
   chat: {
@@ -143,6 +147,13 @@ export const en: Strings = {
     confirmed: 'Confirmed',
     unconfirmed: 'Unconfirmed',
     registeredAt: 'Registered',
+    deleteUser: 'Delete user',
+    deleteUserConfirm: 'Delete "{nickname}"? All their notes, tags, and chat history will be permanently removed.',
+    blockConfirm: 'Block "{nickname}"? They will lose access until unblocked.',
+    unblockConfirm: 'Unblock "{nickname}"?',
+    changeRole: 'Change role',
+    changeRoleConfirm: 'Assign role "{role}" to "{nickname}"?',
+    you: 'you',
   },
 
   profile: {
@@ -155,6 +166,8 @@ export const en: Strings = {
     save: 'Save',
     cancel: 'Cancel',
     language: 'Language',
+    back: 'Back',
+    emailUnconfirmed: 'Email not confirmed',
   },
 
   common: {

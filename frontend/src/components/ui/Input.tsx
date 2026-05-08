@@ -16,9 +16,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       <input
         ref={ref}
         id={id}
-        className={`w-full bg-bg-input border rounded px-3 py-2 text-[13px] text-fg outline-none placeholder:text-fg-muted transition-colors
+        className={`w-full bg-bg-input border rounded text-[13px] text-fg outline-none placeholder:text-fg-muted transition-colors
           ${error ? 'border-danger focus:border-danger' : 'border-border focus:border-border-focus'}
           ${className}`}
+        style={{ padding: '9px 14px' }}
         {...rest}
       />
       {error && <span className="text-[11px] text-danger">{error}</span>}

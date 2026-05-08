@@ -28,6 +28,7 @@ export const ru = {
     invalidToken: 'Ссылка недействительна или устарела.',
     emailConfirmed: 'Email подтверждён. Теперь вы можете войти.',
     passwordChanged: 'Пароль изменён.',
+    wrongPassword: 'Неверный текущий пароль.',
   },
 
   // Notes
@@ -76,6 +77,7 @@ export const ru = {
     select: 'Выбрать',
     selected: '{count} выбрано',
     deleteMultipleConfirm: 'Удалить {count} заметок? Они будут перемещены в корзину.',
+    restoreMultipleConfirm: 'Восстановить {count} заметок?',
     keywordSection: 'По ключевым словам',
     recentSearches: 'Недавние',
   },
@@ -87,6 +89,8 @@ export const ru = {
     deleteTagConfirm: 'Удалить тег «{name}»? Он будет снят со всех заметок.',
     noTags: 'Нет тегов',
     notesWithTag: '{count} заметок',
+    deleteMultipleConfirm: 'Удалить {count} тегов? Они будут сняты со всех заметок.',
+    tagExists: 'Тег с таким именем уже существует.',
   },
 
   // Chat
@@ -146,6 +150,13 @@ export const ru = {
     confirmed: 'Подтверждён',
     unconfirmed: 'Не подтверждён',
     registeredAt: 'Зарегистрирован',
+    deleteUser: 'Удалить пользователя',
+    deleteUserConfirm: 'Удалить пользователя «{nickname}»? Все его заметки, теги и история чатов будут удалены безвозвратно.',
+    blockConfirm: 'Заблокировать «{nickname}»? Пользователь потеряет доступ до разблокировки.',
+    unblockConfirm: 'Разблокировать «{nickname}»?',
+    changeRole: 'Сменить роль',
+    changeRoleConfirm: 'Назначить роль «{role}» пользователю «{nickname}»?',
+    you: 'вы',
   },
 
   // Profile
@@ -159,6 +170,8 @@ export const ru = {
     save: 'Сохранить',
     cancel: 'Отмена',
     language: 'Язык',
+    back: 'Назад',
+    emailUnconfirmed: 'Email не подтверждён',
   },
 
   // Common

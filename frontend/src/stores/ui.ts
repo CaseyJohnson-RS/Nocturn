@@ -41,6 +41,7 @@ interface UIState {
   noteTabStatus: Record<string, NoteTabStatus>;
   searchQuery: string;
   searchSubmitted: string;
+  expandedTagIds: Set<string>;
 
   openTab: (tab: TabId) => void;
   closeTab: (tab: TabId) => void;
@@ -53,8 +54,10 @@ interface UIState {
   detachNote: (id: string) => void;
   clearAttachedNotes: () => void;
   setNoteTabStatus: (noteId: string, status: NoteTabStatus) => void;
+  reorderTabs: (from: number, to: number) => void;
   setSearchQuery: (q: string) => void;
   setSearchSubmitted: (q: string) => void;
+  toggleExpandedTag: (id: string) => void;
 }
 
 const INITIAL_TAB: PanelTabId = { type: 'panel', panel: 'notes' };
@@ -73,6 +76,7 @@ export const useUIStore = create<UIState>()(
       ephemeralNoteIds: new Set(),
       searchQuery: '',
       searchSubmitted: '',
+      expandedTagIds: new Set(),
 
       openTab: (tab) => {
         const key = tabKey(tab);
@@ -122,8 +126,23 @@ export const useUIStore = create<UIState>()(
           next.delete(id);
           return { ephemeralNoteIds: next };
         }),
+      reorderTabs: (from, to) => {
+        if (from === to) return;
+        set((s) => {
+          const tabs = [...s.openTabs];
+          const [moved] = tabs.splice(from, 1);
+          tabs.splice(from < to ? to - 1 : to, 0, moved);
+          return { openTabs: tabs };
+        });
+      },
       setSearchQuery: (q) => set({ searchQuery: q }),
       setSearchSubmitted: (q) => set({ searchSubmitted: q }),
+      toggleExpandedTag: (id) =>
+        set((s) => {
+          const next = new Set(s.expandedTagIds);
+          next.has(id) ? next.delete(id) : next.add(id);
+          return { expandedTagIds: next };
+        }),
     }),
     {
       name: 'nocturn-ui',

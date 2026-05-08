@@ -18,4 +18,7 @@ export const adminApi = {
 
   setRole: (id: string, data: SetRoleRequest) =>
     api.put<UserListItem>(`/api/admin/users/${id}/role`, data).then((r) => r.data),
+
+  deleteUser: (id: string) =>
+    api.delete<void>(`/api/admin/users/${id}`).then((r) => r.data),
 };

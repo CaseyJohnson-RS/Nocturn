@@ -1,6 +1,6 @@
 import { useUIStore, tabKey, type TabId, type SidebarPanel } from '@/stores/ui';
 import { useChatStore } from '@/stores/chat';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { notesApi } from '@/api/notes';
 import { t } from '@/i18n';
@@ -81,7 +81,10 @@ function NoteTabStatusDot({ noteId }: { noteId: string }) {
 }
 
 export function CenterPanel() {
-  const { openTabs, activeTabKey, closeTab, setActiveTab } = useUIStore();
+  const { openTabs, activeTabKey, closeTab, setActiveTab, reorderTabs } = useUIStore();
+
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const activeTab = openTabs.find((tab) => tabKey(tab) === activeTabKey) ?? null;
 
@@ -93,17 +96,31 @@ export function CenterPanel() {
           className="flex-shrink-0 flex overflow-x-auto border-b border-border"
           style={{ height: '38px', background: 'var(--color-bg-tab)' }}
         >
-          {openTabs.map((tab) => {
+          {openTabs.map((tab, index) => {
             const key = tabKey(tab);
             const isActive = key === activeTabKey;
+            const isDropTarget = dragOverIndex === index && dragIndexRef.current !== index;
             return (
               <div
                 key={key}
-                className={`flex-shrink-0 flex items-center gap-2 cursor-pointer border-r border-border select-none
+                draggable
+                className={`relative flex-shrink-0 flex items-center gap-2 cursor-pointer border-r border-border select-none
                   ${isActive ? 'bg-bg-base text-fg border-t-2 border-t-accent' : 'text-fg-muted hover:bg-bg-hover hover:text-fg'}`}
                 style={{ padding: '0 14px 0 12px', maxWidth: '200px', minWidth: '80px' }}
                 onClick={() => setActiveTab(tab)}
+                onDragStart={() => { dragIndexRef.current = index; }}
+                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(index); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragIndexRef.current !== null) reorderTabs(dragIndexRef.current, index);
+                  setDragOverIndex(null);
+                }}
+                onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
+                onDragLeave={() => setDragOverIndex(null)}
               >
+                {isDropTarget && (
+                  <div className="absolute left-0 inset-y-0 w-0.5 bg-accent z-10" />
+                )}
                 {tab.type === 'note' && <NoteTabStatusDot noteId={tab.id} />}
                 <span
                   className="text-[12px] flex-1 min-w-0 truncate"
@@ -120,6 +137,22 @@ export function CenterPanel() {
               </div>
             );
           })}
+
+          {/* Trailing drop zone — allows dropping after the last tab */}
+          <div
+            className="relative flex-1 min-w-4"
+            onDragOver={(e) => { e.preventDefault(); setDragOverIndex(openTabs.length); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragIndexRef.current !== null) reorderTabs(dragIndexRef.current, openTabs.length);
+              setDragOverIndex(null);
+            }}
+            onDragLeave={() => setDragOverIndex(null)}
+          >
+            {dragOverIndex === openTabs.length && (
+              <div className="absolute left-0 inset-y-0 w-0.5 bg-accent" />
+            )}
+          </div>
         </div>
       )}
 

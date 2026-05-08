@@ -223,6 +223,17 @@ body {
 }
 .note-body th { background: var(--color-bg-hover); font-weight: 600; }
 
+/* ── Skeleton loading animation ── */
+@keyframes skel-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.skel {
+  background: var(--color-bg-hover);
+  border-radius: 4px;
+  animation: skel-pulse 1.5s ease-in-out infinite;
+}
+
 /* ── Save-dot pulse animation ── */
 @keyframes save-pulse {
   0%, 100% { opacity: 1; }

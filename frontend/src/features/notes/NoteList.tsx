@@ -44,6 +44,7 @@ export default function NoteList() {
     onSuccess: (_, id) => {
       useUIStore.getState().closeTab({ type: 'note', id });
       void qc.invalidateQueries({ queryKey: ['notes'] });
+      void qc.invalidateQueries({ queryKey: ['notes-trash'] });
       setDeleteTarget(null);
     },
   });
@@ -66,6 +67,7 @@ export default function NoteList() {
     await Promise.allSettled(ids.map((id) => notesApi.delete(id)));
     ids.forEach((id) => useUIStore.getState().closeTab({ type: 'note', id }));
     void qc.invalidateQueries({ queryKey: ['notes'] });
+    void qc.invalidateQueries({ queryKey: ['notes-trash'] });
     clearSelection();
     setBatchDeleteConfirm(false);
     setDeletingBatch(false);
