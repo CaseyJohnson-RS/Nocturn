@@ -111,7 +111,7 @@ class TestListUsers:
 
     @pytest.mark.anyio()
     async def test_limit_too_high(self, client: AsyncClient) -> None:
-        resp = await client.get(USERS, params={"limit": 200})
+        resp = await client.get(USERS, params={"limit": 501})
 
         assert resp.status_code == 422
 

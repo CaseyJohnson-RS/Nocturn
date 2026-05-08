@@ -32,7 +32,7 @@ AdminServiceDep = Annotated[AdminService, Depends(get_admin_service)]
 async def list_users(
     _: AdminUser,
     service: AdminServiceDep,
-    limit: int = Query(default=50, ge=1, le=100, description="Max number of users"),
+    limit: int = Query(default=50, ge=1, le=500, description="Max number of users"),
     offset: int = Query(default=0, ge=0, description="Number of users to skip"),
     search: str | None = Query(default=None, description="Search by email or nickname"),
 ):
