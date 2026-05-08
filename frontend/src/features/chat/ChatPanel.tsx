@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { aiApi, sendMessage } from '@/api/ai';
 import { useChatStore } from '@/stores/chat';
 import { MessageBubble } from './MessageBubble';
+import { ActionPanel } from './ActionPanel';
 import { ChatInput } from './ChatInput';
 import { t } from '@/i18n';
 import type { AIMessageResponse, Action, Proposal, PendingConfirmation, SessionResponse } from '@/types/api';
+
 
 export default function ChatPanel() {
   const s = t();
@@ -238,8 +240,7 @@ export default function ChatPanel() {
       });
       if (useChatStore.getState().activeSessionId === id) {
         useChatStore.getState().cancel();
-        const next = sessions.find((sess) => sess.id !== id);
-        setActiveSession(next?.id ?? null);
+        setActiveSession(null);
       }
     },
   });
@@ -402,10 +403,8 @@ export default function ChatPanel() {
                             style={{ padding: '6px 12px' }}
                             onClick={() => {
                               setMenuOpenId(null);
-                              if (confirm(s.chat.deleteSessionConfirm.replace('{title}', sess.title ?? s.chat.chat))) {
-                                closeHistory();
-                                deleteSessionMut.mutate(sess.id);
-                              }
+                              closeHistory();
+                              deleteSessionMut.mutate(sess.id);
                             }}
                           >
                             {s.chat.deleteSession}
@@ -434,14 +433,12 @@ export default function ChatPanel() {
               <MessageBubble
                 key={msg.id}
                 message={msg}
-                sessionId={activeSessionId}
               />
             ))}
 
             {streamingMsg && (
               <MessageBubble
                 message={streamingMsg}
-                sessionId={activeSessionId}
                 isStreaming
                 streamingContent={streamingContent}
               />
@@ -453,12 +450,8 @@ export default function ChatPanel() {
         )}
       </div>
 
-      {/* Pending proposals hint */}
-      {hasPending && !isGenerating && (
-        <div className="flex-shrink-0 px-3 py-2 bg-bg-card border-t border-border text-[11px] text-warning text-center">
-          ⚠ {s.chat.pendingHint}
-        </div>
-      )}
+      {/* Action panel — proposals & confirmations */}
+      {activeSessionId && <ActionPanel sessionId={activeSessionId} />}
 
       {/* Input */}
       <ChatInput
