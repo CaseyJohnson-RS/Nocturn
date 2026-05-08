@@ -31,11 +31,16 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
   const { attachedNoteIds, attachNote, detachNote } = useUIStore();
 
   // ── Load note ──────────────────────────────────────────────────────────────
-  const { data: note } = useQuery<NoteResponse>({
+  const { data: note, isError: noteLoadError } = useQuery<NoteResponse>({
     queryKey: ['note', noteId],
     queryFn: () => notesApi.get(noteId),
     staleTime: Infinity,
+    retry: (count, err) => !(isAxiosError(err) && err.response?.status === 404) && count < 2,
   });
+
+  useEffect(() => {
+    if (noteLoadError) useUIStore.getState().closeTab({ type: 'note', id: noteId } as TabId);
+  }, [noteLoadError, noteId]);
 
   const [title, setTitle] = useState(() => note?.title ?? '');
   const [content, setContent] = useState(() => note?.content ?? '');

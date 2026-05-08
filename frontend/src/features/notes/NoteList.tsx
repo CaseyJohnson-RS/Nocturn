@@ -41,7 +41,8 @@ export default function NoteList() {
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => notesApi.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      useUIStore.getState().closeTab({ type: 'note', id });
       void qc.invalidateQueries({ queryKey: ['notes'] });
       setDeleteTarget(null);
     },
@@ -61,7 +62,9 @@ export default function NoteList() {
 
   async function handleBatchDelete() {
     setDeletingBatch(true);
-    await Promise.allSettled(Array.from(selectedIds).map((id) => notesApi.delete(id)));
+    const ids = Array.from(selectedIds);
+    await Promise.allSettled(ids.map((id) => notesApi.delete(id)));
+    ids.forEach((id) => useUIStore.getState().closeTab({ type: 'note', id }));
     void qc.invalidateQueries({ queryKey: ['notes'] });
     clearSelection();
     setBatchDeleteConfirm(false);

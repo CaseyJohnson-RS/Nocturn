@@ -76,6 +76,8 @@ export const ru = {
     select: 'Выбрать',
     selected: '{count} выбрано',
     deleteMultipleConfirm: 'Удалить {count} заметок? Они будут перемещены в корзину.',
+    keywordSection: 'По ключевым словам',
+    recentSearches: 'Недавние',
   },
 
   // Tags

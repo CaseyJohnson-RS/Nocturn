@@ -76,6 +76,8 @@ export const en: Strings = {
     select: 'Select',
     selected: '{count} selected',
     deleteMultipleConfirm: 'Delete {count} notes? They will be moved to trash.',
+    keywordSection: 'By keywords',
+    recentSearches: 'Recent',
   },
 
   tags: {
