@@ -100,3 +100,25 @@ async def set_role(
     An admin cannot change their own role.
     """
     return await service.set_role(admin.id, user_id, body.role)
+
+
+@router.delete(
+    "/users/{user_id}",
+    status_code=204,
+    summary="Delete a user",
+    responses={
+        403: {"description": "Not an admin or trying to delete yourself"},
+        404: {"description": "User not found"},
+    },
+)
+async def delete_user(
+    user_id: uuid.UUID,
+    admin: AdminUser,
+    service: AdminServiceDep,
+):
+    """Permanently delete a user and all their data. **Admin only.**
+
+    Cascades to notes, tags, chat sessions, embeddings, and tokens.
+    An admin cannot delete their own account.
+    """
+    await service.delete_user(admin.id, user_id)

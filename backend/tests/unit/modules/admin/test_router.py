@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from src.app.common.exceptions import NotFoundError
+from src.app.common.exceptions import ForbiddenError, NotFoundError
 from src.app.middleware.auth import require_admin
 from src.app.modules.admin.router import get_admin_service, router
 from src.app.modules.admin.schemas import UserListItem, UserListResponse
@@ -172,6 +172,42 @@ class TestSetActive:
         resp = await client.put(f"{USERS}/{uuid.uuid4()}/active", json={"is_active": False})
 
         assert resp.status_code == 404
+
+
+# --- DELETE /users/{user_id} ---
+
+
+class TestDeleteUser:
+    @pytest.mark.anyio()
+    async def test_success(
+        self,
+        client: AsyncClient,
+        mock_service: AsyncMock,
+        admin_id: uuid.UUID,
+    ) -> None:
+        uid = uuid.uuid4()
+        mock_service.delete_user.return_value = None
+
+        resp = await client.delete(f"{USERS}/{uid}")
+
+        assert resp.status_code == 204
+        mock_service.delete_user.assert_called_once_with(admin_id, uid)
+
+    @pytest.mark.anyio()
+    async def test_not_found(self, client: AsyncClient, mock_service: AsyncMock) -> None:
+        mock_service.delete_user.side_effect = NotFoundError("User not found")
+
+        resp = await client.delete(f"{USERS}/{uuid.uuid4()}")
+
+        assert resp.status_code == 404
+
+    @pytest.mark.anyio()
+    async def test_forbidden(self, client: AsyncClient, mock_service: AsyncMock) -> None:
+        mock_service.delete_user.side_effect = ForbiddenError("Cannot delete yourself")
+
+        resp = await client.delete(f"{USERS}/{uuid.uuid4()}")
+
+        assert resp.status_code == 403
 
 
 # --- PUT /users/{user_id}/role ---

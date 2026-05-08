@@ -150,6 +150,53 @@ class TestSetActive:
             await service.set_active(admin_id, uuid.uuid4(), False)
 
 
+# --- delete_user ---
+
+
+class TestDeleteUser:
+    @pytest.mark.anyio()
+    async def test_deletes_user(
+        self,
+        service: AdminService,
+        repo: AsyncMock,
+        admin_id: uuid.UUID,
+    ) -> None:
+        uid = uuid.uuid4()
+        user = _mock_user(user_id=uid)
+        repo.get_user_by_id.return_value = user
+
+        await service.delete_user(admin_id, uid)
+
+        repo.get_user_by_id.assert_called_once_with(uid)
+        repo.delete_user.assert_called_once_with(user)
+
+    @pytest.mark.anyio()
+    async def test_cannot_delete_self(
+        self,
+        service: AdminService,
+        repo: AsyncMock,
+        admin_id: uuid.UUID,
+    ) -> None:
+        with pytest.raises(ForbiddenError, match="own"):
+            await service.delete_user(admin_id, admin_id)
+
+        repo.delete_user.assert_not_called()
+
+    @pytest.mark.anyio()
+    async def test_user_not_found(
+        self,
+        service: AdminService,
+        repo: AsyncMock,
+        admin_id: uuid.UUID,
+    ) -> None:
+        repo.get_user_by_id.return_value = None
+
+        with pytest.raises(NotFoundError):
+            await service.delete_user(admin_id, uuid.uuid4())
+
+        repo.delete_user.assert_not_called()
+
+
 # --- set_role ---
 
 
