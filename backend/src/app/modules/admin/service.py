@@ -58,3 +58,13 @@ class AdminService:
         await self.repo.set_role(user_id, role)
         user = await self.repo.get_user_by_id(user_id)
         return UserListItem.model_validate(user)
+
+    async def delete_user(self, admin_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        if admin_id == user_id:
+            raise ForbiddenError("Cannot delete your own account")
+
+        user = await self.repo.get_user_by_id(user_id)
+        if not user:
+            raise NotFoundError("User not found")
+
+        await self.repo.delete_user(user)

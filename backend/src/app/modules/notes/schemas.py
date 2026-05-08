@@ -94,6 +94,7 @@ class NoteListItem(BaseModel):
     title: str | None = Field(description="Note title or `null`")
     updated_at: datetime = Field(description="Last modification timestamp (UTC)")
     deleted_at: datetime | None = Field(description="Soft-delete timestamp or `null`")
+    tags: list[TagBrief] = Field(default=[], description="Tags attached to this note")
 
     model_config = {"from_attributes": True}
 

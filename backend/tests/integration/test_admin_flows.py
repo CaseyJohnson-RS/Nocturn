@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.modules.auth.models import User
+from src.app.modules.notes.models import Note
 
 REGISTER = "/api/auth/register"
 LOGIN = "/api/auth/login"
@@ -121,6 +122,92 @@ class TestGetUser:
         resp = await client.get(f"{USERS}/{uuid.uuid4()}", headers=_auth(admin_token))
 
         assert resp.status_code == 404
+
+
+# --- Delete user ---
+
+
+class TestDeleteUser:
+    @pytest.mark.anyio()
+    async def test_deletes_user(self, client: AsyncClient, db: AsyncSession) -> None:
+        admin_token = await _create_and_login(client, db, ADMIN_USER, role="admin")
+        await _create_and_login(client, db, REGULAR_USER)
+
+        result = await db.execute(select(User).where(User.email == REGULAR_USER["email"]))
+        user: User = result.scalar_one()
+
+        resp = await client.delete(f"{USERS}/{user.id}", headers=_auth(admin_token))
+
+        assert resp.status_code == 204
+
+        result = await db.execute(select(User).where(User.email == REGULAR_USER["email"]))
+        assert result.scalar_one_or_none() is None
+
+    @pytest.mark.anyio()
+    async def test_deleted_user_cannot_login(self, client: AsyncClient, db: AsyncSession) -> None:
+        admin_token = await _create_and_login(client, db, ADMIN_USER, role="admin")
+        await _create_and_login(client, db, REGULAR_USER)
+
+        result = await db.execute(select(User).where(User.email == REGULAR_USER["email"]))
+        user: User = result.scalar_one()
+
+        await client.delete(f"{USERS}/{user.id}", headers=_auth(admin_token))
+
+        resp = await client.post(
+            LOGIN,
+            json={"email": REGULAR_USER["email"], "password": REGULAR_USER["password"]},
+        )
+        assert resp.status_code == 401
+
+    @pytest.mark.anyio()
+    async def test_cascades_to_notes(self, client: AsyncClient, db: AsyncSession) -> None:
+        admin_token = await _create_and_login(client, db, ADMIN_USER, role="admin")
+        await _create_and_login(client, db, REGULAR_USER)
+
+        result = await db.execute(select(User).where(User.email == REGULAR_USER["email"]))
+        user: User = result.scalar_one()
+
+        note = Note(user_id=user.id)
+        db.add(note)
+        await db.commit()
+
+        await client.delete(f"{USERS}/{user.id}", headers=_auth(admin_token))
+
+        result = await db.execute(select(Note).where(Note.user_id == user.id))
+        assert result.scalar_one_or_none() is None
+
+    @pytest.mark.anyio()
+    async def test_cannot_delete_self(self, client: AsyncClient, db: AsyncSession) -> None:
+        admin_token = await _create_and_login(client, db, ADMIN_USER, role="admin")
+
+        result = await db.execute(select(User).where(User.email == ADMIN_USER["email"]))
+        admin: User = result.scalar_one()
+
+        resp = await client.delete(f"{USERS}/{admin.id}", headers=_auth(admin_token))
+
+        assert resp.status_code == 403
+
+    @pytest.mark.anyio()
+    async def test_not_found(self, client: AsyncClient, db: AsyncSession) -> None:
+        import uuid
+
+        admin_token = await _create_and_login(client, db, ADMIN_USER, role="admin")
+
+        resp = await client.delete(f"{USERS}/{uuid.uuid4()}", headers=_auth(admin_token))
+
+        assert resp.status_code == 404
+
+    @pytest.mark.anyio()
+    async def test_forbidden_for_regular_user(self, client: AsyncClient, db: AsyncSession) -> None:
+        await _create_and_login(client, db, ADMIN_USER, role="admin")
+        user_token = await _create_and_login(client, db, REGULAR_USER)
+
+        result = await db.execute(select(User).where(User.email == ADMIN_USER["email"]))
+        admin: User = result.scalar_one()
+
+        resp = await client.delete(f"{USERS}/{admin.id}", headers=_auth(user_token))
+
+        assert resp.status_code == 403
 
 
 # --- Set active ---

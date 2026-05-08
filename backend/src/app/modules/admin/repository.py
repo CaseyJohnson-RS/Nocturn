@@ -48,3 +48,7 @@ class AdminRepository:
         await self.db.execute(
             update(User).where(User.id == user_id).values(role=role)
         )
+
+    async def delete_user(self, user: User) -> None:
+        await self.db.delete(user)
+        await self.db.flush()
