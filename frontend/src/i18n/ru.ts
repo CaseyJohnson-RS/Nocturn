@@ -67,6 +67,15 @@ export const ru = {
     attachToChat: 'Прикрепить к чату',
     detachFromChat: 'Открепить от чата',
     attachLimit: 'Максимум 5 заметок',
+    aiProposal: 'Правка AI',
+    aiDeleteProposal: 'Удаление AI',
+    deleteProposalWarning: 'Ассистент предлагает удалить эту заметку',
+    acceptProposal: 'Принять',
+    rejectProposal: 'Отклонить',
+    proposedTitle: 'Предложенное название',
+    select: 'Выбрать',
+    selected: '{count} выбрано',
+    deleteMultipleConfirm: 'Удалить {count} заметок? Они будут перемещены в корзину.',
   },
 
   // Tags

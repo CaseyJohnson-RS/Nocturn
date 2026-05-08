@@ -67,6 +67,15 @@ export const en: Strings = {
     attachToChat: 'Attach to chat',
     detachFromChat: 'Detach from chat',
     attachLimit: 'Maximum 5 notes',
+    aiProposal: 'AI Edit',
+    aiDeleteProposal: 'AI Delete',
+    deleteProposalWarning: 'The assistant proposes deleting this note',
+    acceptProposal: 'Accept',
+    rejectProposal: 'Reject',
+    proposedTitle: 'Proposed title',
+    select: 'Select',
+    selected: '{count} selected',
+    deleteMultipleConfirm: 'Delete {count} notes? They will be moved to trash.',
   },
 
   tags: {

@@ -1,9 +1,10 @@
 import { useUIStore, tabKey, type TabId, type SidebarPanel } from '@/stores/ui';
+import { useChatStore } from '@/stores/chat';
 import { lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { notesApi } from '@/api/notes';
 import { t } from '@/i18n';
-import type { NoteResponse } from '@/types/api';
+import type { NoteResponse, Proposal } from '@/types/api';
 
 const NoteList    = lazy(() => import('@/features/notes/NoteList'));
 const SearchPanel = lazy(() => import('@/features/notes/SearchPanel'));
@@ -40,6 +41,45 @@ function TabLabel({ tab }: { tab: TabId }) {
   return <>Diff</>;
 }
 
+function NoteTabStatusDot({ noteId }: { noteId: string }) {
+  const saveStatus = useUIStore((s) => s.noteTabStatus[noteId] ?? null);
+  const messages = useChatStore((s) => s.messages);
+
+  let hasDeleteProposal = false;
+  let hasAIProposal = false;
+  for (const msg of messages) {
+    for (const action of msg.actions ?? []) {
+      const p = action as Proposal;
+      if (p.type === 'proposal' && p.note_id === noteId && p.status === 'pending') {
+        if (p.proposal_type === 'delete_note') hasDeleteProposal = true;
+        else hasAIProposal = true;
+      }
+    }
+  }
+
+  let color: string;
+  let pulse = false;
+  if (saveStatus === 'conflict' || hasDeleteProposal) {
+    color = 'var(--color-danger)';
+  } else if (saveStatus === 'saving') {
+    color = 'var(--color-warning)';
+    pulse = true;
+  } else if (saveStatus === 'dirty') {
+    color = 'var(--color-warning)';
+  } else if (hasAIProposal) {
+    color = 'var(--color-accent)';
+  } else {
+    color = 'var(--color-success)';
+  }
+
+  return (
+    <span
+      className={pulse ? 'save-dot-pulse' : undefined}
+      style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: color, flexShrink: 0 }}
+    />
+  );
+}
+
 export function CenterPanel() {
   const { openTabs, activeTabKey, closeTab, setActiveTab } = useUIStore();
 
@@ -51,7 +91,7 @@ export function CenterPanel() {
       {openTabs.length > 0 && (
         <div
           className="flex-shrink-0 flex overflow-x-auto border-b border-border"
-          style={{ height: 'var(--tabbar-h)', background: 'var(--color-bg-tab)' }}
+          style={{ height: '38px', background: 'var(--color-bg-tab)' }}
         >
           {openTabs.map((tab) => {
             const key = tabKey(tab);
@@ -59,13 +99,20 @@ export function CenterPanel() {
             return (
               <div
                 key={key}
-                className={`flex-shrink-0 flex items-center gap-2 px-3 text-[12px] cursor-pointer border-r border-border
-                  ${isActive ? 'bg-bg-base text-fg border-t border-t-accent' : 'text-fg-muted hover:bg-bg-hover hover:text-fg'}`}
+                className={`flex-shrink-0 flex items-center gap-2 cursor-pointer border-r border-border select-none
+                  ${isActive ? 'bg-bg-base text-fg border-t-2 border-t-accent' : 'text-fg-muted hover:bg-bg-hover hover:text-fg'}`}
+                style={{ padding: '0 14px 0 12px', maxWidth: '200px', minWidth: '80px' }}
                 onClick={() => setActiveTab(tab)}
               >
-                <span><TabLabel tab={tab} /></span>
+                {tab.type === 'note' && <NoteTabStatusDot noteId={tab.id} />}
+                <span
+                  className="text-[12px] flex-1 min-w-0 truncate"
+                  style={{ lineHeight: '1' }}
+                >
+                  <TabLabel tab={tab} />
+                </span>
                 <button
-                  className="text-fg-disabled hover:text-fg text-[14px] leading-none"
+                  className="flex-shrink-0 flex items-center justify-center rounded w-4 h-4 text-[13px] leading-none text-fg-disabled hover:text-fg hover:bg-bg-hover transition-colors"
                   onClick={(e) => { e.stopPropagation(); closeTab(tab); }}
                 >
                   ×

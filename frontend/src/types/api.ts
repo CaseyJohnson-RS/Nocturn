@@ -86,6 +86,7 @@ export interface NoteListItem {
   title: string | null;
   updated_at: string;
   deleted_at: string | null;
+  tags: TagBrief[];
 }
 
 export interface NoteListResponse {

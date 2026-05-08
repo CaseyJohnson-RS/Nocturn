@@ -24,7 +24,12 @@ export function tabKey(tab: TabId): string {
   return `${tab.type}:${tab.id}`;
 }
 
+export type NoteTabStatus = 'dirty' | 'saving' | 'conflict' | null;
+
 interface UIState {
+  ephemeralNoteIds: Set<string>;
+  markEphemeral: (id: string) => void;
+  clearEphemeral: (id: string) => void;
   openTabs: TabId[];
   activeTabKey: string | null;
   chatOpen: boolean;
@@ -32,6 +37,7 @@ interface UIState {
   offlineBanner: boolean;
   readonlyBanner: boolean;
   attachedNoteIds: string[];
+  noteTabStatus: Record<string, NoteTabStatus>;
 
   openTab: (tab: TabId) => void;
   closeTab: (tab: TabId) => void;
@@ -43,6 +49,7 @@ interface UIState {
   attachNote: (id: string) => void;
   detachNote: (id: string) => void;
   clearAttachedNotes: () => void;
+  setNoteTabStatus: (noteId: string, status: NoteTabStatus) => void;
 }
 
 const INITIAL_TAB: PanelTabId = { type: 'panel', panel: 'notes' };
@@ -55,6 +62,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   offlineBanner: false,
   readonlyBanner: false,
   attachedNoteIds: [],
+  noteTabStatus: {},
+  ephemeralNoteIds: new Set(),
 
   openTab: (tab) => {
     const key = tabKey(tab);
@@ -94,4 +103,14 @@ export const useUIStore = create<UIState>((set, get) => ({
   detachNote: (id) =>
     set((s) => ({ attachedNoteIds: s.attachedNoteIds.filter((i) => i !== id) })),
   clearAttachedNotes: () => set({ attachedNoteIds: [] }),
+  setNoteTabStatus: (noteId, status) =>
+    set((s) => ({ noteTabStatus: { ...s.noteTabStatus, [noteId]: status } })),
+  markEphemeral: (id) =>
+    set((s) => ({ ephemeralNoteIds: new Set([...s.ephemeralNoteIds, id]) })),
+  clearEphemeral: (id) =>
+    set((s) => {
+      const next = new Set(s.ephemeralNoteIds);
+      next.delete(id);
+      return { ephemeralNoteIds: next };
+    }),
 }));
