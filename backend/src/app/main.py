@@ -24,6 +24,7 @@ from src.app.seed import seed_admin
 logger = logging.getLogger(__name__)
 
 
+# This is bad. I know, but I just don't want to make something smarter
 def _run_migrations() -> None:
     subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],

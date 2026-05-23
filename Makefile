@@ -1,14 +1,28 @@
+ENVFILE ?= .env.example
 
-# Infra for testing
+clear-infra:
+	docker rm -f postgres || true
+	docker volume rm postgres_data || true
+	docker rm -f redis || true
 
-infra-test-up:
-	docker compose up -f docker-compose.test.yaml -d
+start-infra:
+	docker compose --env-file $(ENVFILE) up -d postgres redis
 
-infra-test-down:
-	docker compose stop -f docker-compose.test.yaml
+# BACKEND
 
+backend-lint:
+	cd backend && uv run flake8 src/ tests/
 
-# Local run full project (backend + frontend + worker)
+backend-test-full: clear-infra start-infra
+	cd backend && uv run --env-file ../$(ENVFILE) pytest
 
-run:
-	docker compose up
+backend-test-unit: clear-infra start-infra
+	cd backend && uv run --env-file ../$(ENVFILE) pytest tests/unit
+
+backend-test-integration: clear-infra start-infra
+	cd backend && uv run --env-file ../$(ENVFILE) pytest tests/integration
+
+# FRONTEND
+
+frontend-test:
+	cd frontend && npm run test
