@@ -3,7 +3,7 @@ import { useAuthStore } from '@/stores/auth';
 
 // Use Vite env var VITE_API_URL if provided at build time, otherwise default to same-origin '/'.
 // For dev the vite server config already proxies '/api' -> http://localhost:8000.
-const BASE_URL = (import.meta.env as any).VITE_API_URL ?? '/';
+export const BASE_URL = (import.meta.env as any).VITE_API_URL ?? '/';
 
 export const api = axios.create({
   baseURL: BASE_URL,

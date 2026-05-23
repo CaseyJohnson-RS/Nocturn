@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, BASE_URL } from './client';
 import { useAuthStore } from '@/stores/auth';
 import type {
   SessionResponse,
@@ -105,7 +105,8 @@ async function* sendSSERequest(
   signal?: AbortSignal,
 ): AsyncGenerator<SSEFrame> {
   const token = useAuthStore.getState().accessToken;
-  const response = await fetch(url, {
+  const fullUrl = url.startsWith('http') ? url : `${BASE_URL.replace(/\/$/, '')}${url}`;
+  const response = await fetch(fullUrl, {
     method,
     headers: {
       'Content-Type': 'application/json',
