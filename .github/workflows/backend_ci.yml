@@ -32,9 +32,7 @@ jobs:
       #   run: make backend-lint
 
       - name: Tests (integration + unit)
-        run: make backend-test-full
-        env:
-          ENVFILE: .env.example
+        run: make backend-test-full ENVFILE=.env.example  
 
   deploy:
     needs: test
