@@ -60,11 +60,7 @@ api.interceptors.response.use(
 
 async function refreshAccessToken(): Promise<string | null> {
   try {
-    const res = await axios.post<{ access_token: string }>(
-      '/api/auth/refresh',
-      {},
-      { withCredentials: true },
-    );
+    const res = await api.post<{ access_token: string }>('/api/auth/refresh');
     const token = res.data.access_token;
     useAuthStore.getState().setAccessToken(token);
     return token;
