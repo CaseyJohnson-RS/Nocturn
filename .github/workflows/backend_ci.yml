@@ -43,4 +43,4 @@ jobs:
       - name: Trigger Render deploy
         run: curl -X POST "$RENDER_BACKEND_DEPLOY_HOOK"
         env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+          RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}

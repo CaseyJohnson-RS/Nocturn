@@ -1,14 +1,13 @@
-name: Backend CI
+name: Frontend CI
 
 on:
   push:
     paths:
-      - "backend/**"
-      - "docker-compose.yml"
+      - "frontend/**"
       - "Makefile"
   pull_request:
     paths:
-      - "backend/**"
+      - "frontend/**"
 
 jobs:
   test:
@@ -17,32 +16,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Install uv
-        run: pip install uv
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
 
-      - name: Install backend deps
-        run: cd backend && uv sync
-
-      # - name: Lint
-      #   run: make backend-lint
-
-      - name: Tests (integration + unit)
-        run: make backend-test-full
-        env:
-          ENVFILE: .env.example
+      - name: Run frontend tests
+        run: make frontend-test
 
   deploy:
     needs: test
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-  
+
     steps:
       - name: Trigger Render deploy
         run: curl -X POST "$RENDER_FRONTEND_DEPLOY_HOOK"
         env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
+          RENDER_FRONTEND_DEPLOY_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
