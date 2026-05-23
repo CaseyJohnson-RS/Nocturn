@@ -26,3 +26,8 @@ backend-test-integration: clear-infra start-infra
 
 frontend-test:
 	cd frontend && npm run test
+
+# Run app localy
+
+run-app:
+	docker compose --env-file $(ENVFILE) up
