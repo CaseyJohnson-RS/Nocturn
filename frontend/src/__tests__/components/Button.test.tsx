@@ -51,17 +51,17 @@ describe('Button', () => {
     expect(screen.getByRole('button')).toHaveClass('bg-transparent');
   });
 
-  // Size class checks  (sm: text-[11px] px-3 py-1 | md: text-[13px] px-4 py-2)
+  // Size class checks  (sm: text-[12px] px-4 py-1.5 | md: text-[13px] px-5 py-2.5)
   it('applies sm size classes', () => {
     render(<Button size="sm">Small</Button>);
     const btn = screen.getByRole('button');
-    expect(btn).toHaveClass('px-3', 'py-1', 'text-[11px]');
+    expect(btn).toHaveClass('px-4', 'py-1.5', 'text-[12px]');
   });
 
   it('applies md size classes by default', () => {
     render(<Button>Medium</Button>);
     const btn = screen.getByRole('button');
-    expect(btn).toHaveClass('px-4', 'py-2', 'text-[13px]');
+    expect(btn).toHaveClass('px-5', 'py-2.5', 'text-[13px]');
   });
 
   it('passes extra props through to the button element', () => {

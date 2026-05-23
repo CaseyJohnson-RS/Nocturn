@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth';
 vi.mock('@/api/client', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(), patch: vi.fn() },
   isAxiosError: vi.fn(),
+  BASE_URL: '/',
 }));
 
 // Cast to any — vi.mocked() doesn't resolve mock helpers on overloaded axios types
