@@ -50,3 +50,6 @@ htmlcov/
 
 # Redis
 dump.rdb
+
+# CI/CD
+!.github/
