@@ -3,20 +3,15 @@ import MockAdapter from 'axios-mock-adapter';
 import { api, isAxiosError } from '@/api/client';
 import { useAuthStore } from '@/stores/auth';
 
-// Two adapters: one for the `api` instance, one for bare `axios`.
-// refreshAccessToken() uses axios.post (default instance), not api.post.
 let apiMock: MockAdapter;
-let axiosMock: MockAdapter;
 
 beforeEach(() => {
   apiMock = new MockAdapter(api);
-  axiosMock = new MockAdapter(axios);
   useAuthStore.setState({ user: null, accessToken: null, isInitialized: false });
 });
 
 afterEach(() => {
   apiMock.restore();
-  axiosMock.restore();
 });
 
 // ── Request interceptor ───────────────────────────────────────────────────────
@@ -53,8 +48,7 @@ describe('401 response interceptor – successful refresh', () => {
       .onGet('/api/notes')
       .reply(200, { items: [] });
 
-    // Refresh via bare axios.post → success
-    axiosMock.onPost('/api/auth/refresh').reply(200, { access_token: 'fresh' });
+    apiMock.onPost('/api/auth/refresh').reply(200, { access_token: 'fresh' });
 
     const res = await api.get('/api/notes');
 
@@ -80,7 +74,7 @@ describe('401 response interceptor – failed refresh', () => {
     useAuthStore.setState({ accessToken: 'stale' });
 
     apiMock.onGet('/api/notes').reply(401);
-    axiosMock.onPost('/api/auth/refresh').reply(401); // refresh itself fails
+    apiMock.onPost('/api/auth/refresh').reply(401);
 
     try {
       await api.get('/api/notes');
@@ -103,7 +97,7 @@ describe('401 response interceptor – failed refresh', () => {
       .reply(401);
 
     // Refresh succeeds so a retry is attempted
-    axiosMock.onPost('/api/auth/refresh').reply(200, { access_token: 'tok2' });
+    apiMock.onPost('/api/auth/refresh').reply(200, { access_token: 'tok2' });
 
     try {
       await api.get('/api/protected');
@@ -112,7 +106,7 @@ describe('401 response interceptor – failed refresh', () => {
     }
 
     // Refresh should only have been called once, not twice
-    const refreshCalls = axiosMock.history.post.filter(
+    const refreshCalls = apiMock.history.post.filter(
       (r) => r.url === '/api/auth/refresh',
     );
     expect(refreshCalls).toHaveLength(1);

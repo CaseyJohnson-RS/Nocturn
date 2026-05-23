@@ -1,4 +1,4 @@
-ENVFILE ?= .env
+ENVFILE ?= .env.example
 
 clear-infra:
 	docker rm -f postgres || true
