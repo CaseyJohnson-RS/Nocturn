@@ -1,0 +1,22 @@
+---
+title: "Module: Admin"
+---
+classDiagram
+    direction TB
+
+    class User {
+        <<external: auth>>
+    }
+    class AdminRepository {
+        +list_users()
+        +set_active()
+        +set_role()
+    }
+    class AdminService {
+        +list_users()
+        +set_active()
+        +set_role()
+    }
+
+    AdminRepository ..> User
+    AdminService --> AdminRepository

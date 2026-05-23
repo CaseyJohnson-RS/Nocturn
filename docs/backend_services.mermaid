@@ -1,0 +1,106 @@
+---
+title: "Backend — Layer 3: Services"
+---
+classDiagram
+    direction TB
+
+    %% ── SERVICES ───────────────────────────────────────
+
+    class AuthService {
+        -AuthRepository repo
+        +register(email, password, nickname) str
+        +confirm_email(token) None
+        +login(email, password) tuple
+        +refresh(refresh_token) tuple
+        +logout(refresh_token) None
+        +request_password_reset(email) str
+        +reset_password(token, new_password) None
+        +create_access_token(user_id, role)$ str
+        +decode_access_token(token)$ dict
+    }
+
+    class NotesService {
+        -NotesRepository repo
+        -TagsRepository tags_repo
+        -RAGService rag
+        +create(user_id, title, content, tag_ids) NoteResponse
+        +get(user_id, note_id) NoteResponse
+        +list(user_id, limit, offset, ...) NoteListResponse
+        +update(user_id, note_id, version, ...) NoteResponse
+        +soft_delete(user_id, note_id) None
+        +restore(user_id, note_id) NoteResponse
+        +hard_delete(user_id, note_id) None
+        +update_tags(user_id, note_id, tag_ids) NoteResponse
+        +search_keywords(user_id, keywords) NoteSearchResponse
+    }
+
+    class TagsService {
+        -TagsRepository repo
+        +create(user_id, name) TagResponse
+        +get(user_id, tag_id) TagResponse
+        +list(user_id, limit, offset, search) TagListResponse
+        +update(user_id, tag_id, name) TagResponse
+        +delete(user_id, tag_id) None
+    }
+
+    class RAGService {
+        -RAGRepository rag_repo
+        -NotesRepository notes_repo
+        +index_note(note) None
+        +remove_note(note_id) None
+        +search(user_id, query, limit) SearchResponse
+    }
+
+    class AIService {
+        -AIRepository ai_repo
+        -NotesRepository notes_repo
+        -TagsRepository tags_repo
+        -RAGService rag
+        +create_session(user_id, title) SessionResponse
+        +list_sessions(user_id, ...) SessionListResponse
+        +delete_session(user_id, session_id) None
+        +list_messages(user_id, session_id) MessagesListResponse
+        +chat_stream(user_id, session_id, message) AsyncGenerator
+    }
+
+    class AdminService {
+        -AdminRepository repo
+        +list_users(limit, offset, search) UserListResponse
+        +get_user(user_id) UserListItem
+        +set_active(admin_id, user_id, is_active) UserListItem
+        +set_role(admin_id, user_id, role) UserListItem
+    }
+
+    class ProfileService {
+        -AuthRepository repo
+        +update_nickname(user_id, nickname) UserResponse
+        +change_password(user_id, current, new) None
+    }
+
+    %% ── REPOSITORIES (referenced) ──────────────────────
+
+    class AuthRepository { <<Repository>> }
+    class NotesRepository { <<Repository>> }
+    class TagsRepository { <<Repository>> }
+    class RAGRepository { <<Repository>> }
+    class AIRepository { <<Repository>> }
+    class AdminRepository { <<Repository>> }
+
+    %% ── SERVICE → REPOSITORY ───────────────────────────
+
+    AuthService --> AuthRepository : uses
+    NotesService --> NotesRepository : uses
+    NotesService --> TagsRepository : uses
+    TagsService --> TagsRepository : uses
+    RAGService --> RAGRepository : uses
+    RAGService --> NotesRepository : uses
+    AIService --> AIRepository : uses
+    AIService --> NotesRepository : uses
+    AIService --> TagsRepository : uses
+    AdminService --> AdminRepository : uses
+    ProfileService --> AuthRepository : uses
+
+    %% ── SERVICE → SERVICE ──────────────────────────────
+
+    NotesService --> RAGService : delegates indexing
+    AIService --> RAGService : delegates search

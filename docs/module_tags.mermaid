@@ -1,0 +1,35 @@
+---
+title: "Module: Tags"
+---
+classDiagram
+    direction TB
+
+    class Tag {
+        +UUID user_id
+        +str name
+    }
+    class Note {
+        <<external: notes>>
+    }
+    class NoteTag {
+        <<join table>>
+        +UUID note_id
+        +UUID tag_id
+    }
+    class TagsRepository {
+        +create_tag()
+        +list_tags()
+        +update_tag_name()
+        +verify_tags_belong_to_user()
+    }
+    class TagsService {
+        +create()
+        +list()
+        +update()
+        +delete()
+    }
+
+    Tag "1" --> "*" NoteTag
+    NoteTag "*" --> "1" Note
+    TagsRepository ..> Tag
+    TagsService --> TagsRepository

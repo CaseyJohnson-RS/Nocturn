@@ -1,0 +1,58 @@
+---
+title: "RAG — Background Embedding Worker"
+---
+sequenceDiagram
+    participant Worker
+    participant RAGRepository
+    participant RAGService
+    participant NotesRepository
+    participant DB
+    participant EmbeddingAPI as Embedding API
+
+    Note over Worker: Runs on interval (embedding_queue_interval_seconds)
+
+    Worker->>RAGRepository: get_pending_tasks(limit=20)
+    RAGRepository->>DB: SELECT embedding_queue WHERE status='pending'
+    DB-->>RAGRepository: tasks[]
+
+    alt no tasks
+        Worker->>Worker: sleep(interval)
+    else tasks found
+        loop for each task
+            Worker->>RAGRepository: mark_processing(task_id)
+            RAGRepository->>DB: UPDATE embedding_queue SET status='processing'
+
+            Worker->>RAGService: embed_note(note_id, user_id)
+
+            RAGService->>NotesRepository: get_note_by_id(note_id, user_id)
+            NotesRepository->>DB: SELECT notes
+            DB-->>NotesRepository: note
+
+            RAGService->>RAGRepository: delete_chunks_for_note(note_id)
+            RAGRepository->>DB: DELETE note_chunks
+
+            RAGService->>RAGService: chunk_text(content, title)
+            Note right of RAGService: Splits into overlapping<br/>chunks by token size
+
+            RAGService->>RAGRepository: create_chunks(chunk_objs)
+            RAGRepository->>DB: INSERT note_chunks (no embeddings yet)
+
+            RAGService->>RAGRepository: get_chunks_for_note(note_id)
+            RAGRepository->>DB: SELECT note_chunks
+            DB-->>RAGRepository: chunks[]
+
+            RAGService->>EmbeddingAPI: create_embeddings(texts[])
+            EmbeddingAPI-->>RAGService: embeddings[]
+
+            RAGService->>RAGRepository: set_chunk_embeddings(chunk_ids, embeddings)
+            RAGRepository->>DB: UPDATE note_chunks SET embedding=...
+
+            Worker->>RAGRepository: mark_done(task_id)
+            RAGRepository->>DB: UPDATE embedding_queue SET status='done'
+
+            alt error during embed_note
+                Worker->>RAGRepository: mark_failed(task_id, error, attempts+1)
+                RAGRepository->>DB: UPDATE embedding_queue SET status='failed'
+            end
+        end
+    end

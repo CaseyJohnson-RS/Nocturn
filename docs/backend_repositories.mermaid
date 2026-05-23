@@ -1,0 +1,109 @@
+---
+title: "Backend — Layer 2: Repositories"
+---
+classDiagram
+    direction TB
+
+    %% ── REPOSITORIES ───────────────────────────────────
+
+    class AuthRepository {
+        -AsyncSession db
+        +get_user_by_id(user_id) User
+        +get_user_by_email(email) User
+        +create_user(email, nickname, password_hash) User
+        +confirm_email(user_id) None
+        +update_password(user_id, hash) None
+        +update_nickname(user_id, nickname) None
+        +set_active(user_id, is_active) None
+        +create_refresh_token(user_id, hash, expires_at) RefreshToken
+        +get_refresh_token_by_hash(hash) RefreshToken
+        +delete_all_user_refresh_tokens(user_id) None
+        +create_verification_token(user_id, type, hash) VerificationToken
+        +get_verification_token_by_hash(hash, type) VerificationToken
+    }
+
+    class NotesRepository {
+        -AsyncSession db
+        +create_note(user_id, title, content) Note
+        +get_note_by_id(note_id, user_id) Note
+        +get_active_note(note_id, user_id) Note
+        +list_notes(user_id, limit, offset, ...) tuple
+        +update_note(note, title, content) Note
+        +set_note_tags(note_id, tag_ids) None
+        +soft_delete_note(note, deleted_at) None
+        +restore_note(note) Note
+        +hard_delete_note(note) None
+        +count_user_notes(user_id) int
+        +search_by_keywords(user_id, keywords, limit) tuple
+    }
+
+    class TagsRepository {
+        -AsyncSession db
+        +create_tag(user_id, name) Tag
+        +get_tag_by_id(tag_id, user_id) Tag
+        +get_tag_by_name(user_id, name) Tag
+        +list_tags(user_id, limit, offset, search) tuple
+        +update_tag_name(tag, name) Tag
+        +delete_tag(tag) None
+        +count_user_tags(user_id) int
+        +verify_tags_belong_to_user(user_id, tag_ids) list
+    }
+
+    class RAGRepository {
+        -AsyncSession db
+        +upsert_chunks(note_id, user_id, chunks) None
+        +delete_chunks_by_note(note_id) None
+        +search_similar(user_id, embedding, limit) list
+        +get_pending_tasks(limit) list
+        +upsert_embedding_task(note_id, user_id) None
+        +delete_embedding_task(note_id) None
+    }
+
+    class AIRepository {
+        -AsyncSession db
+        +create_session(user_id, title) ChatSession
+        +get_session(session_id, user_id) ChatSession
+        +list_sessions(user_id, limit, offset) tuple
+        +delete_session(session_id) None
+        +add_message(session_id, role, content, ...) ChatMessage
+        +list_messages(session_id, user_id) list
+        +update_session_title(session_id, title) None
+    }
+
+    class AdminRepository {
+        -AsyncSession db
+        +list_users(limit, offset, search) tuple
+        +get_user_by_id(user_id) User
+        +set_active(user_id, is_active) None
+        +set_role(user_id, role) None
+    }
+
+    %% ── DB MODELS (referenced) ─────────────────────────
+
+    class User { <<Model>> }
+    class RefreshToken { <<Model>> }
+    class VerificationToken { <<Model>> }
+    class Note { <<Model>> }
+    class Tag { <<Model>> }
+    class NoteChunk { <<Model>> }
+    class EmbeddingTask { <<Model>> }
+    class ChatSession { <<Model>> }
+    class ChatMessage { <<Model>> }
+
+    %% ── REPOSITORY → MODEL ─────────────────────────────
+
+    AuthRepository ..> User : queries
+    AuthRepository ..> RefreshToken : queries
+    AuthRepository ..> VerificationToken : queries
+
+    NotesRepository ..> Note : queries
+
+    TagsRepository ..> Tag : queries
+
+    RAGRepository ..> NoteChunk : queries
+    RAGRepository ..> EmbeddingTask : queries
+
+    AIRepository ..> ChatSession : queries
+    AIRepository ..> ChatMessage : queries
+
+    AdminRepository ..> User : queries

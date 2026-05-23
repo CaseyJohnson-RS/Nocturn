@@ -1,0 +1,57 @@
+---
+title: "Auth — Registration & Email Confirmation"
+---
+sequenceDiagram
+    actor Client
+    participant Router
+    participant AuthService
+    participant AuthRepository
+    participant DB
+    participant Email
+
+    %% ── Registration ──────────────────────────────────────────
+    Client->>Router: POST /auth/register {email, password, nickname}
+    Router->>AuthService: register(email, password, nickname)
+
+    AuthService->>AuthService: validate_password()
+    AuthService->>AuthRepository: get_user_by_email(email)
+    AuthRepository->>DB: SELECT users
+    DB-->>AuthRepository: user | None
+
+    alt user already exists
+        AuthService->>AuthRepository: update_nickname() + update_password()
+    else new user
+        AuthService->>AuthRepository: create_user(email, nickname, hash)
+        AuthRepository->>DB: INSERT users
+    end
+
+    AuthService->>AuthRepository: create_verification_token(user_id, "email_confirm", hash, exp)
+    AuthRepository->>DB: INSERT verification_tokens
+
+    AuthService->>Email: send_confirmation_email(email, raw_token)
+    Email-->>Client: Email with confirmation link
+
+    AuthService-->>Router: "Confirmation link sent"
+    Router-->>Client: 200 OK
+
+    %% ── Email Confirmation ────────────────────────────────────
+    Client->>Router: POST /auth/confirm-email {token}
+    Router->>AuthService: confirm_email(raw_token)
+
+    AuthService->>AuthRepository: get_verification_token_by_hash(hash, "email_confirm")
+    AuthRepository->>DB: SELECT verification_tokens
+    DB-->>AuthRepository: token | None
+
+    alt token invalid or expired
+        AuthService-->>Router: 404 NotFoundError
+        Router-->>Client: 404 Not Found
+    else token valid
+        AuthService->>AuthRepository: confirm_email(user_id)
+        AuthRepository->>DB: UPDATE users SET is_email_confirmed=true
+
+        AuthService->>AuthRepository: delete_verification_token(token_id)
+        AuthRepository->>DB: DELETE verification_tokens
+
+        AuthService-->>Router: None
+        Router-->>Client: 200 OK
+    end

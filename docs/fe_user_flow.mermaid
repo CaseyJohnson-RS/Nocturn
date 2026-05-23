@@ -1,0 +1,85 @@
+---
+title: "Frontend — User Flow"
+---
+flowchart TD
+    Start(["Пользователь открывает приложение"])
+    Start --> CheckAuth{{"Токен\nдействителен?"}}
+
+    %% ── RETURNING USER ──────────────────────────────────────────
+    CheckAuth -->|"да"| AppShell["AppShell\n/app"]
+
+    AppShell --> OpenNote["Открыть заметку\n(клик в NoteList)"]
+    OpenNote --> EditNote["Редактировать\n(заголовок / контент / теги)"]
+    EditNote --> AutoSave["Автосохранение\n(дебаунс 500 мс)"]
+    AutoSave --> SaveOK{{"Конфликт\nверсий?"}}
+    SaveOK -->|"нет"| NoteClean["Заметка сохранена ✓"]
+    SaveOK -->|"да"| ResolveConflict["Разрешить конфликт\n(оставить / принять)"]
+    ResolveConflict --> NoteClean
+
+    NoteClean --> OpenChat["Открыть AI Chat\n(иконка AI в Sidebar)"]
+    OpenChat --> SendMessage["Написать сообщение\n(можно прикрепить заметки)"]
+    SendMessage --> SSEStream["Получить SSE-поток\n(текст дельтами)"]
+
+    SSEStream --> HasProposal{{"AI предложил\nизменения?"}}
+    HasProposal -->|"нет"| ChatDone["Ответ получен ✓"]
+    HasProposal -->|"да"| ShowProposal["ProposalCard\nв ChatPanel"]
+
+    ShowProposal --> ApplyDecision{{"Пользователь\nрешает"}}
+    ApplyDecision -->|"Apply"| PatchNote["Применить изменения\nк заметке → автосохранение"]
+    ApplyDecision -->|"Dismiss"| ChatDone
+    PatchNote --> RAGReindex["RAG переиндексирует\nзаметку (фоново)"]
+    RAGReindex --> ChatDone
+
+    ChatDone --> Continue{{"Продолжить\nработу?"}}
+    Continue -->|"да"| AppShell
+    Continue -->|"нет"| Logout["Выйти\n→ /auth/login"]
+
+    %% ── NEW USER ─────────────────────────────────────────────────
+    CheckAuth -->|"нет"| LoginPage["/auth/login"]
+
+    LoginPage --> HasAccount{{"Есть\nаккаунт?"}}
+
+    HasAccount -->|"да"| DoLogin["Ввести email + пароль\n→ POST /api/auth/login"]
+    DoLogin --> LoginResult{{"Успешно?"}}
+    LoginResult -->|"нет"| LoginError["Показать ошибку"]
+    LoginError --> LoginPage
+    LoginResult -->|"да"| AppShell
+
+    HasAccount -->|"нет"| RegisterPage["/auth/register"]
+    RegisterPage --> DoRegister["Заполнить форму\n→ POST /api/auth/register"]
+    DoRegister --> AwaitEmail["Подтвердить email\n(письмо от Resend)"]
+    AwaitEmail --> ConfirmLink["Перейти по ссылке\n/auth/confirm-email?token=…"]
+    ConfirmLink --> LoginPage
+
+    HasAccount -->|"забыл пароль"| ForgotPage["/auth/forgot-password"]
+    ForgotPage --> SendReset["POST /api/auth/forgot-password\n→ письмо с токеном"]
+    SendReset --> ResetPage["/auth/reset-password?token=…"]
+    ResetPage --> NewPassword["Ввести новый пароль\n→ POST /api/auth/reset-password"]
+    NewPassword --> LoginPage
+
+    %% ── PROFILE ──────────────────────────────────────────────────
+    AppShell --> OpenProfile["Открыть профиль\n(AvatarButton)"]
+    OpenProfile --> ProfileAction{{"Действие"}}
+    ProfileAction -->|"сменить никнейм"| SaveNickname["PATCH /api/profile/nickname"]
+    ProfileAction -->|"сменить пароль"| ChangePassword["POST /api/profile/password"]
+    ProfileAction -->|"сменить язык"| ToggleLocale["ru ↔ en (localStorage)"]
+    ProfileAction -->|"удалить аккаунт"| ConfirmDelete{{"Подтвердить\nудаление?"}}
+    ConfirmDelete -->|"да"| DeleteAccount["DELETE /api/profile\n→ очистить сессию"]
+    ConfirmDelete -->|"нет"| OpenProfile
+    SaveNickname --> AppShell
+    ChangePassword --> AppShell
+    ToggleLocale --> AppShell
+    DeleteAccount --> LoginPage
+
+    %% ── STYLES ───────────────────────────────────────────────────
+    classDef action fill:#f5f5f5,stroke:#999,color:#333
+    classDef decision fill:#e8e8e8,stroke:#888,color:#333
+    classDef page fill:#e0e0e0,stroke:#999,color:#333,font-weight:bold
+    classDef terminal fill:#d4d4d4,stroke:#888,color:#333,rx:20
+    classDef success fill:#ebebeb,stroke:#aaa,color:#333
+
+    class Start,Logout terminal
+    class LoginPage,RegisterPage,ForgotPage,ResetPage,AppShell page
+    class CheckAuth,HasAccount,LoginResult,SaveOK,HasProposal,ApplyDecision,Continue,ProfileAction,ConfirmDelete decision
+    class EditNote,AutoSave,SendMessage,SSEStream,DoLogin,DoRegister,AwaitEmail,ConfirmLink,SendReset,NewPassword,OpenNote,OpenChat,ShowProposal,PatchNote,RAGReindex,OpenProfile,SaveNickname,ChangePassword,ToggleLocale,DeleteAccount,ResolveConflict action
+    class NoteClean,ChatDone,LoginError success

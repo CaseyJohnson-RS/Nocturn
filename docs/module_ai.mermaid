@@ -1,0 +1,42 @@
+---
+title: "Module: AI Assistant"
+---
+classDiagram
+    direction TB
+
+    class ChatSession {
+        +UUID user_id
+        +str title
+        +datetime last_message_at
+    }
+    class ChatMessage {
+        +UUID session_id
+        +str role
+        +str content
+        +int token_estimate
+    }
+    class NotesRepository {
+        <<external: notes>>
+    }
+    class RAGService {
+        <<external: rag>>
+    }
+    class AIRepository {
+        +create_session()
+        +list_sessions()
+        +add_message()
+        +list_messages()
+    }
+    class AIService {
+        +create_session()
+        +chat_stream()
+        +list_sessions()
+        +delete_session()
+    }
+
+    ChatSession --> ChatMessage
+    AIRepository ..> ChatSession
+    AIRepository ..> ChatMessage
+    AIService --> AIRepository
+    AIService --> NotesRepository
+    AIService --> RAGService

@@ -1,0 +1,45 @@
+---
+title: "Module: Auth"
+---
+classDiagram
+    direction TB
+
+    class User {
+        +UUID id
+        +str email
+        +str role
+        +bool is_active
+    }
+    class RefreshToken {
+        +UUID user_id
+        +datetime expires_at
+    }
+    class VerificationToken {
+        +UUID user_id
+        +str type
+        +datetime expires_at
+    }
+    class AuthRepository {
+        +get_user_by_email()
+        +create_user()
+        +create_refresh_token()
+        +create_verification_token()
+    }
+    class AuthService {
+        +register()
+        +login()
+        +refresh()
+        +reset_password()
+    }
+    class ProfileService {
+        +update_nickname()
+        +change_password()
+    }
+
+    User --> RefreshToken
+    User --> VerificationToken
+    AuthRepository ..> User
+    AuthRepository ..> RefreshToken
+    AuthRepository ..> VerificationToken
+    AuthService --> AuthRepository
+    ProfileService --> AuthRepository

@@ -1,0 +1,65 @@
+---
+title: "Frontend — AI Chat SSE Stream"
+---
+sequenceDiagram
+    actor User
+    participant ChatInput
+    participant ChatPanel
+    participant chatStore
+    participant aiApi
+    participant Backend
+
+    User->>ChatInput: вводит сообщение, нажимает Send
+
+    ChatPanel->>chatStore: setGenerating(true, abortController)
+    ChatPanel->>chatStore: addMessage({role:"user", content})
+
+    ChatPanel->>aiApi: sendMessage(sessionId, {content, note_ids?})
+    Note over aiApi: fetch() c credentials + Bearer token,<br/>ждёт заголовок text/event-stream
+
+    aiApi->>Backend: POST /api/ai/sessions/{id}/messages
+    Backend-->>aiApi: 200 text/event-stream (headers)
+
+    loop Парсинг SSE-потока (parseSSE → parseChunks)
+        Backend-->>aiApi: event: ai:text_delta\ndata: {"delta":"..."}
+        aiApi-->>ChatPanel: frame {event, data}
+        ChatPanel->>chatStore: appendDelta(delta)
+        chatStore-->>ChatPanel: streamingContent обновлён
+        ChatPanel-->>User: текст появляется в MessageBubble (streaming overlay)
+
+        alt Planner вызвал инструмент → proposal
+            Backend-->>aiApi: event: ai:proposal\ndata: {Proposal}
+            aiApi-->>ChatPanel: frame
+            ChatPanel->>chatStore: pushStreamingAction(proposal)
+            ChatPanel-->>User: ProposalCard появляется под сообщением
+        end
+
+        alt Planner запросил bulk-подтверждение
+            Backend-->>aiApi: event: ai:pending_confirmation\ndata: {PendingConfirmation}
+            aiApi-->>ChatPanel: frame
+            ChatPanel->>chatStore: pushStreamingAction(confirmation)
+            ChatPanel-->>User: PendingConfirmCard с кнопками Confirm / Dismiss
+        end
+
+        alt Ошибка LLM или таймаут
+            Backend-->>aiApi: event: ai:error\ndata: {code, message}
+            aiApi-->>ChatPanel: frame
+            ChatPanel-->>User: показывает сообщение об ошибке
+        end
+    end
+
+    Backend-->>aiApi: event: ai:done\ndata: {message: {полное сообщение из БД}}
+    aiApi-->>ChatPanel: frame (done)
+
+    ChatPanel->>chatStore: clearStreaming()
+    ChatPanel->>chatStore: addMessage(savedMessage)
+    ChatPanel->>chatStore: setGenerating(false)
+    ChatPanel-->>User: финальное сообщение заменяет streaming overlay
+
+    opt Пользователь нажал Cancel во время генерации
+        User->>ChatPanel: кнопка Stop
+        ChatPanel->>chatStore: cancel()
+        chatStore->>aiApi: abortController.abort()
+        ChatPanel->>Backend: POST /api/ai/sessions/{id}/cancel
+        Note over Backend: Redis SET cancel:{session_id}
+    end

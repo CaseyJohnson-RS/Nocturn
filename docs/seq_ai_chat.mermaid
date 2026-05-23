@@ -1,0 +1,78 @@
+---
+title: "AI Chat — send_message (Planner Loop)"
+---
+sequenceDiagram
+    actor Client
+    participant Router
+    participant Redis
+    participant AIService
+    participant AIRepository
+    participant RAGService
+    participant LLM as LLM API
+    participant DB
+
+    Client->>Router: POST /ai/sessions/{id}/messages {content, note_ids?}
+    Router->>AIService: pre_validate_send(user_id, session_id, content)
+    AIService->>AIRepository: get_session() + has_pending_actions()
+    AIRepository->>DB: SELECT chat_sessions / chat_messages
+    DB-->>AIRepository: session / pending flag
+
+    alt validation failed (not found / too long / pending actions)
+        Router-->>Client: 4xx Error
+    else ok — open SSE stream
+        Router-->>Client: 200 text/event-stream (headers sent)
+
+        AIService->>Redis: SET generating:{session_id} NX EX 120
+        alt already generating
+            AIService-->>Client: event: ai:error {code: conflict}
+        else lock acquired
+            AIService->>AIRepository: add_message(role="user", content)
+            AIRepository->>DB: INSERT chat_messages
+
+            AIService->>AIRepository: get_recent_messages(session_id)
+            AIRepository->>DB: SELECT chat_messages (within token budget)
+            DB-->>AIRepository: history[]
+
+            opt note_ids attached
+                AIService->>DB: SELECT notes (previews)
+            end
+
+            loop Planner rounds (max 10)
+                AIService->>Redis: check cancel:{session_id}
+
+                AIService->>LLM: chat_completion_stream(messages, tools=PLANNER_TOOLS)
+                LLM-->>Client: event: ai:text_delta {delta} (streamed)
+                LLM-->>AIService: accumulator (full_content + tool_calls)
+
+                alt no tool calls → break loop
+                    Note over AIService: Done generating
+                else tool calls present
+                    loop for each tool call
+                        AIService->>AIService: ToolExecutor.execute(name, args)
+                        Note right of AIService: e.g. search_notes →<br/>RAGService.search()
+                        AIService->>RAGService: search(user_id, query)
+                        RAGService->>DB: vector similarity search
+                        DB-->>RAGService: chunks + notes
+                        RAGService-->>AIService: SearchResponse
+
+                        opt proposal / confirmation created
+                            AIService-->>Client: event: ai:proposal / ai:pending_confirmation
+                        end
+                    end
+
+                    AIService->>LLM: next round with tool results appended
+                end
+            end
+
+            AIService->>AIRepository: add_message(role="assistant", content, actions)
+            AIRepository->>DB: INSERT chat_messages
+
+            opt session has no title yet
+                AIService->>AIRepository: update_session_title(first 100 chars)
+                AIRepository->>DB: UPDATE chat_sessions
+            end
+
+            AIService-->>Client: event: ai:done {message: full saved message}
+            AIService->>Redis: DEL generating:{session_id} + cancel:{session_id}
+        end
+    end

@@ -1,0 +1,98 @@
+---
+title: "Nocturn — System Architecture"
+---
+flowchart TD
+    Browser(["🌐 Browser"])
+
+    subgraph Frontend["Frontend (React)"]
+        UI["UI / Pages"]
+    end
+
+    subgraph Backend["Backend"]
+        subgraph API["FastAPI Application"]
+            MW_CORS["CORS Middleware"]
+            MW_RL["RateLimitMiddleware\n(sliding window per IP / user)"]
+            MW_JWT["JWT Auth\n(Bearer token → CurrentUser)"]
+
+            subgraph Routers["API Routers"]
+                R_AUTH["/api/auth\n/api/profile"]
+                R_NOTES["/api/notes\n/api/tags"]
+                R_RAG["/api/rag"]
+                R_AI["/api/ai\n(SSE stream)"]
+                R_ADMIN["/api/admin"]
+            end
+
+            subgraph Services["Services"]
+                S_AUTH["AuthService\nProfileService"]
+                S_NOTES["NotesService\nTagsService"]
+                S_RAG["RAGService"]
+                S_AI["AIService\n(Planner loop)"]
+                S_ADMIN["AdminService"]
+            end
+        end
+
+        subgraph Worker["Background Worker"]
+            W_EMB["Embedding Queue\n(every 30s)"]
+            W_CLEAN["Cleanup Tasks\n(every 1h)"]
+        end
+    end
+
+    subgraph Storage["Storage"]
+        PG[("PostgreSQL\n+ pgvector\n\nusers, notes, tags,\nchat_sessions,\nnote_chunks,\nembedding_queue")]
+        RD[("Redis\n\nrate limit keys\ngenerating:{session}\ncancel:{session}")]
+    end
+
+    subgraph External["External Services"]
+        LLM["RouterAI API\n(LLM + Embeddings)\nrouterai.ru/api/v1"]
+        EMAIL["Email Provider\n(Resend)"]
+    end
+
+    %% Client → Frontend → API
+    Browser <-->|"HTTPS"| UI
+    UI <-->|"REST + SSE"| MW_CORS
+
+    %% Middleware stack
+    MW_CORS --> MW_RL
+    MW_RL <-->|"check rate\nlimit keys"| RD
+    MW_RL --> MW_JWT
+    MW_JWT --> Routers
+
+    %% Routers → Services
+    R_AUTH --> S_AUTH
+    R_NOTES --> S_NOTES
+    R_RAG --> S_RAG
+    R_AI --> S_AI
+    R_ADMIN --> S_ADMIN
+
+    %% Services → Storage
+    S_AUTH <--> PG
+    S_NOTES <--> PG
+    S_RAG <--> PG
+    S_AI <--> PG
+    S_ADMIN <--> PG
+
+    %% Services → External
+    S_AUTH -->|"send confirmation\n/ reset email"| EMAIL
+    S_AI <-->|"chat_completion_stream\n(SSE)"| LLM
+    S_RAG -->|"create_embeddings"| LLM
+
+    %% AIService → Redis (concurrency)
+    S_AI <-->|"generating / cancel\nflags"| RD
+
+    %% Worker → Storage + External
+    W_EMB <--> PG
+    W_EMB -->|"create_embeddings"| LLM
+    W_CLEAN <--> PG
+
+    %% Styles
+    classDef external fill:#f5f0e8,stroke:#b8a88a,color:#333
+    classDef storage fill:#e8f0fe,stroke:#6b8dd6,color:#333
+    classDef middleware fill:#fef9e8,stroke:#d4b44a,color:#333
+    classDef service fill:#e8f5e9,stroke:#5a9e6f,color:#333
+    classDef worker fill:#fce8f5,stroke:#a85a9e,color:#333
+
+    class LLM,EMAIL external
+    class PG,RD storage
+    class MW_CORS,MW_RL,MW_JWT middleware
+    class S_AUTH,S_NOTES,S_RAG,S_AI,S_ADMIN service
+    class W_EMB,W_CLEAN worker

@@ -1,0 +1,70 @@
+---
+title: "Frontend — chatStore State Machine"
+---
+stateDiagram-v2
+    [*] --> Idle : ChatPanel открыт / сессия загружена
+
+    state Idle {
+        [*] --> Ready
+    }
+
+    note right of Idle
+        messages[] — история из БД.
+        streamingContent пустой.
+        streamingActions пустой.
+    end note
+
+    Idle --> Generating : пользователь нажал Send\n→ setGenerating(true, abortController)\n→ addMessage(role: user)
+
+    state Generating {
+        [*] --> RequestSent : aiApi.sendMessage() — fetch SSE
+
+        RequestSent --> Streaming : получен заголовок text/event-stream
+
+        state Streaming {
+            [*] --> ReceivingDeltas
+
+            ReceivingDeltas --> ReceivingDeltas : ai:text_delta → appendDelta(delta)\nstreamingContent обновляется
+
+            ReceivingDeltas --> ProposalReceived : ai:proposal\n→ pushStreamingAction(proposal)
+            ProposalReceived --> ReceivingDeltas : продолжение потока
+
+            ReceivingDeltas --> ConfirmReceived : ai:pending_confirmation\n→ pushStreamingAction(confirmation)
+            ConfirmReceived --> ReceivingDeltas : продолжение потока
+
+            ReceivingDeltas --> DoneReceived : ai:done — savedMessage
+        }
+    }
+
+    Generating --> Finalizing : DoneReceived
+
+    state Finalizing {
+        [*] --> CommitMessage : clearStreaming()\n→ addMessage(savedMessage)\n→ setGenerating(false)
+    }
+
+    Finalizing --> Idle : сообщение добавлено в историю
+
+    Generating --> Cancelled : пользователь нажал Stop\n→ abortController.abort()\n→ POST /api/ai/sessions/[id]/cancel
+
+    state Cancelled {
+        [*] --> AbortFetch
+        AbortFetch --> ClearStreaming : очистить streamingContent и streamingActions
+    }
+
+    Cancelled --> Idle : поток прерван, частичный текст отброшен
+
+    Generating --> ErrorState : ai:error [code, message]\nили fetch() выбросил исключение
+
+    state ErrorState {
+        [*] --> ShowError : показать сообщение об ошибке\nsetGenerating(false)
+    }
+
+    ErrorState --> Idle : пользователь закрыл ошибку
+
+    Idle --> Idle : пользователь переключил сессию\n→ loadSession(sessionId)\n→ messages[] заменяются
+
+    note right of Generating
+        Redis-ключ generating:[session_id]
+        установлен на бэкенде.
+        Параллельный запрос вернёт 409.
+    end note

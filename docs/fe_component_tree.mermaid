@@ -1,0 +1,96 @@
+---
+title: "Frontend — Component Tree"
+---
+flowchart TD
+    Root["RootLayout\n(auto-refresh token on boot)"]
+
+    Root --> Guard_Auth["RequireAuth\n(redirect → /auth/login if no user)"]
+    Root --> Guard_Guest["RequireGuest\n(redirect → /app if logged in)"]
+
+    Guard_Auth --> AppShell
+
+    subgraph AppShell["AppShell"]
+        Banners["Banners\n(offline / readonly)"]
+        Sidebar
+        CenterPanel
+        ChatPanel["ChatPanel\n(lazy, когда chatOpen)"]
+        ProfilePopup["ProfilePopup\n(когда profileOpen)"]
+    end
+
+    subgraph Sidebar["Sidebar"]
+        NavNotes["NavIcon — Заметки"]
+        NavSearch["NavIcon — Поиск"]
+        NavTags["NavIcon — Теги"]
+        NavTrash["NavIcon — Корзина"]
+        NavAdmin["NavIcon — Администратор\n(только role=admin)"]
+        NavChat["NavIcon — AI-чат"]
+        AvatarBtn["AvatarButton"]
+    end
+
+    subgraph CenterPanel["CenterPanel"]
+        TabBar["TabBar\n(drag-and-drop вкладки)"]
+        TabDot["NoteTabStatusDot\n(dirty / saving / conflict / proposal)"]
+        Content["Content (Suspense lazy)"]
+    end
+
+    Content --> NoteList["NoteList\n(panel:notes)"]
+    Content --> SearchPanel["SearchPanel\n(panel:search)"]
+    Content --> TagsPanel["TagsPanel\n(panel:tags)"]
+    Content --> TrashPanel["TrashPanel\n(panel:trash)"]
+    Content --> AdminPanel["AdminPanel\n(panel:admin)"]
+    Content --> NoteEditor["NoteEditor\n(note:{id})"]
+
+    subgraph NoteEditor["NoteEditor"]
+        TitleInput["TitleInput"]
+        TagRow["TagRow (chips + поиск)"]
+        Toolbar["Toolbar (editor / split / preview)"]
+        CodeMirror["CodeMirror\n(markdown editor)"]
+        Preview["ReactMarkdown Preview"]
+    end
+
+    subgraph ChatPanel["ChatPanel"]
+        SessionHistory["Session History\n(dropdown)"]
+        MessageList["MessageBubble[]"]
+        ActionPanel_["ActionPanel\n(apply-all / dismiss-all)"]
+        ChatInput_["ChatInput\n(textarea + attach notes)"]
+    end
+
+    MessageList --> ProposalCard["ProposalCard\n(apply / dismiss)"]
+    MessageList --> PendingConfirmCard["PendingConfirmCard\n(confirm / dismiss)"]
+
+    AvatarBtn --> ProfilePopup
+
+    subgraph ProfilePopup["ProfilePopup"]
+        NicknameSection["Nickname Section"]
+        PasswordSection["Password Section"]
+        DeleteSection["Delete Account"]
+        LocaleToggle["Locale Toggle (ru/en)"]
+    end
+
+    Guard_Guest --> AuthLayout
+
+    subgraph AuthLayout["AuthLayout (wrapper)"]
+        LoginPage
+        RegisterPage
+        ConfirmEmailPage
+        ForgotPasswordPage
+        ResetPasswordPage
+    end
+
+    %% Stores
+    authStore(["authStore\n(user, accessToken)"])
+    uiStore(["uiStore\n(tabs, chatOpen, banners)"])
+    chatStore(["chatStore\n(messages, streaming)"])
+
+    AppShell -.->|reads| uiStore
+    Sidebar -.->|reads/writes| uiStore
+    CenterPanel -.->|reads/writes| uiStore
+    ChatPanel -.->|reads/writes| chatStore
+    NoteEditor -.->|reads| uiStore
+    NoteEditor -.->|reads| chatStore
+    Root -.->|writes| authStore
+
+    classDef store fill:#e8f0fe,stroke:#6b8dd6,color:#333
+    classDef lazy fill:#fef9e8,stroke:#d4b44a,color:#333
+    class authStore,uiStore,chatStore store
+    class NoteList,SearchPanel,TagsPanel,TrashPanel,AdminPanel,NoteEditor,ChatPanel lazy

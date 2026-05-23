@@ -65,7 +65,7 @@ def _action_email(text: str, button_text: str, link: str, footer: str) -> str:
 
 
 async def send_confirmation_email(to: str, token: str) -> None:
-    link = f"{settings.frontend_url}/confirm-email?token={token}"
+    link = f"{settings.frontend_url}/auth/confirm-email?token={token}"
     html = _action_email(
         text="Welcome to Nocturn! Please confirm your email address:",
         button_text="Confirm Email",
@@ -76,7 +76,7 @@ async def send_confirmation_email(to: str, token: str) -> None:
 
 
 async def send_password_reset_email(to: str, token: str) -> None:
-    link = f"{settings.frontend_url}/reset-password?token={token}"
+    link = f"{settings.frontend_url}/auth/reset-password?token={token}"
     html = _action_email(
         text="You requested a password reset for your Nocturn account:",
         button_text="Reset Password",

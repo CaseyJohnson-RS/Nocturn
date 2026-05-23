@@ -1,4 +1,4 @@
-ENVFILE ?= .env.example
+ENVFILE ?= .env
 
 clear-infra:
 	docker rm -f postgres || true
@@ -29,5 +29,5 @@ frontend-test:
 
 # Run app localy
 
-run-app:
-	docker compose --env-file $(ENVFILE) up
+run-app: clear-infra start-infra
+	ENVFILE=$(ENVFILE) docker compose --env-file $(ENVFILE) up
