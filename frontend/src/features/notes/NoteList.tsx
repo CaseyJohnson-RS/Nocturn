@@ -81,7 +81,7 @@ export default function NoteList() {
       {/* Header */}
       <div
         className="flex-shrink-0 flex items-center justify-between border-b border-border"
-        style={{ height: '40px', padding: '0 16px' }}
+        style={{ height: '48px', padding: '0 16px' }}
       >
         {hasSelection ? (
           <>
@@ -124,7 +124,7 @@ export default function NoteList() {
             </span>
             <button
               className="flex items-center gap-1.5 text-[12px] text-fg-muted hover:text-fg hover:bg-bg-hover rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ padding: '5px 12px' }}
+              style={{ padding: '7px 14px' }}
               onClick={() => createMut.mutate()}
               disabled={createMut.isPending}
               title={s.notes.newNote}
@@ -160,7 +160,8 @@ export default function NoteList() {
             </svg>
             <span className="text-[13px]">{s.notes.noNotes}</span>
             <button
-              className="flex items-center gap-1.5 text-[12px] text-fg-muted hover:text-fg border border-border hover:border-border-focus rounded px-3 py-1.5 transition-colors"
+              className="flex items-center gap-1.5 text-[12px] text-fg-muted hover:text-fg border border-border hover:border-border-focus rounded transition-colors"
+              style={{ padding: '9px 20px' }}
               onClick={() => createMut.mutate()}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { aiApi, sendMessage } from '@/api/ai';
 import { useChatStore } from '@/stores/chat';
+import { useUIStore } from '@/stores/ui';
 import { MessageBubble } from './MessageBubble';
 import { ActionPanel } from './ActionPanel';
 import { ChatInput } from './ChatInput';
@@ -132,9 +133,18 @@ export default function ChatPanel() {
             appendDelta((frame.data as { delta: string }).delta);
             await new Promise<void>((resolve) => setTimeout(resolve, 0));
             break;
-          case 'ai:proposal':
-            pushStreamingAction(frame.data as Action);
+          case 'ai:proposal': {
+            const action = frame.data as Action;
+            pushStreamingAction(action);
+            // Auto-apply: if create_note proposal arrives with note_id, open tab immediately
+            const p = action as Proposal;
+            if (p.type === 'proposal' && p.proposal_type === 'create_note' && p.note_id) {
+              useUIStore.getState().openTab({ type: 'note', id: p.note_id });
+              void queryClient.invalidateQueries({ queryKey: ['notes'] });
+              void queryClient.invalidateQueries({ queryKey: ['note', p.note_id] });
+            }
             break;
+          }
           case 'ai:pending_confirmation':
             pushStreamingAction(frame.data as Action);
             break;

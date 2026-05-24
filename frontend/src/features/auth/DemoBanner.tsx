@@ -21,12 +21,28 @@ export function DemoBanner({ variant }: DemoBannerProps) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-bg-tab px-4 py-3 flex flex-col gap-2.5">
-      <p className="text-[12px] text-fg-muted leading-relaxed">
+    <div
+      className="rounded-lg border border-border bg-bg-tab"
+      style={{ padding: '16px 18px' }}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2" style={{ marginBottom: '10px' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2" className="text-fg-muted flex-shrink-0">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span className="text-[12px] font-medium text-fg-muted">Demo</span>
+      </div>
+
+      {/* Hint text */}
+      <p className="text-[12px] text-fg-muted leading-relaxed" style={{ marginBottom: '14px' }}>
         {variant === 'register' ? s.auth.demoHintRegister : s.auth.demoHintLogin}
       </p>
 
-      <div className="flex flex-col gap-1">
+      {/* Credentials */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <CredRow
           label={s.auth.email}
           value={DEMO_EMAIL}
@@ -63,12 +79,26 @@ function CredRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-bg-hover transition-colors w-full text-left group"
+      className="flex items-center rounded hover:bg-bg-hover transition-colors w-full text-left group"
+      style={{ padding: '7px 10px', gap: '10px' }}
     >
-      <span className="text-[11px] text-fg-disabled w-14 flex-shrink-0">{label}</span>
-      <span className="text-[12px] text-fg font-mono flex-1">{value}</span>
-      <span className="text-[10px] text-fg-disabled group-hover:text-fg-muted flex-shrink-0 w-14 text-right">
-        {copied ? copiedLabel : '⌘C'}
+      <span className="text-fg-disabled flex-shrink-0" style={{ fontSize: '11px', width: '52px' }}>
+        {label}
+      </span>
+      <span className="text-fg font-mono flex-1" style={{ fontSize: '12px' }}>
+        {value}
+      </span>
+      <span
+        className="flex-shrink-0 text-right transition-colors"
+        style={{
+          fontSize: '10px',
+          width: '60px',
+          color: copied ? 'var(--color-accent)' : undefined,
+        }}
+      >
+        {copied
+          ? copiedLabel
+          : <span className="text-fg-disabled group-hover:text-fg-muted">&nbsp;copy</span>}
       </span>
     </button>
   );

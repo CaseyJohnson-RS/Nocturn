@@ -41,6 +41,56 @@ function TabLabel({ tab }: { tab: TabId }) {
   return <>Diff</>;
 }
 
+function TabIcon({ tab }: { tab: TabId }) {
+  const sz = { width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, flexShrink: 0 };
+  if (tab.type === 'note') return (
+    <svg {...sz}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+    </svg>
+  );
+  if (tab.type === 'diff') return (
+    <svg {...sz}>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+      <polyline points="12 5 19 12 12 19"/>
+    </svg>
+  );
+  // panel
+  const panel = tab.panel;
+  if (panel === 'notes') return (
+    <svg {...sz}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+    </svg>
+  );
+  if (panel === 'search') return (
+    <svg {...sz}>
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+  );
+  if (panel === 'tags') return (
+    <svg {...sz}>
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+      <line x1="7" y1="7" x2="7.01" y2="7"/>
+    </svg>
+  );
+  if (panel === 'trash') return (
+    <svg {...sz}>
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>
+  );
+  if (panel === 'admin') return (
+    <svg {...sz}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+  );
+  return null;
+}
+
 function NoteTabStatusDot({ noteId }: { noteId: string }) {
   const saveStatus = useUIStore((s) => s.noteTabStatus[noteId] ?? null);
   const messages = useChatStore((s) => s.messages);
@@ -94,7 +144,7 @@ export function CenterPanel() {
       {openTabs.length > 0 && (
         <div
           className="flex-shrink-0 flex overflow-x-auto border-b border-border"
-          style={{ height: '38px', background: 'var(--color-bg-tab)' }}
+          style={{ height: 'var(--tabbar-h)', background: 'var(--color-bg-tab)' }}
         >
           {openTabs.map((tab, index) => {
             const key = tabKey(tab);
@@ -121,6 +171,7 @@ export function CenterPanel() {
                 {isDropTarget && (
                   <div className="absolute left-0 inset-y-0 w-0.5 bg-accent z-10" />
                 )}
+                <TabIcon tab={tab} />
                 {tab.type === 'note' && <NoteTabStatusDot noteId={tab.id} />}
                 <span
                   className="text-[12px] flex-1 min-w-0 truncate"
