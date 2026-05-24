@@ -7,6 +7,7 @@ import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { isAxiosError } from '@/api/client';
 import { t } from '@/i18n';
+import { DemoBanner } from './DemoBanner';
 
 export default function LoginPage() {
   const s = t();
@@ -45,6 +46,7 @@ export default function LoginPage() {
 
   return (
     <AuthLayout title="Nocturn" subtitle={s.auth.login}>
+      <DemoBanner variant="login" />
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Input
           id="email"

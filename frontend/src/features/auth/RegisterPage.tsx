@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { authApi } from '@/api/auth';
 import { isAxiosError } from '@/api/client';
 import { t } from '@/i18n';
+import { DemoBanner } from './DemoBanner';
 
 export default function RegisterPage() {
   const s = t();
@@ -40,6 +41,7 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout title={s.auth.register}>
+      <DemoBanner variant="register" />
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Input
           id="nickname"

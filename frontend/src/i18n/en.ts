@@ -30,6 +30,9 @@ export const en: Strings = {
     emailConfirmed: 'Email confirmed. You can now sign in.',
     passwordChanged: 'Password changed.',
     wrongPassword: 'Incorrect current password.',
+    demoHintRegister: 'Registration is unavailable — email confirmation is not configured. To explore the app, sign in with the demo account:',
+    demoHintLogin: 'Want to try? Sign in with the demo account:',
+    demoCopied: 'Copied!',
   },
 
   notes: {
