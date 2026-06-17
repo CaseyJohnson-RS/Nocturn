@@ -9,6 +9,7 @@ engine = create_async_engine(
     echo=settings.database_echo,
     pool_size=settings.database_pool_size,
     max_overflow=settings.database_max_overflow,
+    connect_args={"ssl": "require"},
 )
 """
 Async SQLAlchemy engine.
