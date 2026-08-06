@@ -4,7 +4,7 @@ import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI 
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.app.common.database.engine import async_session_factory, engine
@@ -178,3 +178,8 @@ async def health_check():
     only for basic liveness probes.
     """
     return {"status": "ok"}
+
+
+@app.get("/", summary="Funny health check", tags=["system"])
+async def funny_health_check(name: str = "world", message: str = "Let's be friends!"):
+    return f"Hello {name}! {message}"
