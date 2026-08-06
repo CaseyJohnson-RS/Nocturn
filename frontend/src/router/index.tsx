@@ -10,6 +10,11 @@ const ConfirmEmailPage = lazy(() => import('@/features/auth/ConfirmEmailPage'));
 const ForgotPasswordPage = lazy(() => import('@/features/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('@/features/auth/ResetPasswordPage'));
 
+// Proactive refresh interval — slightly less than the access token TTL (15 min).
+// Keeps the session alive without waiting for a 401 to trigger a refresh.
+// Also acts as a keep-alive ping for the backend on free-tier hosting.
+const PROACTIVE_REFRESH_MS = 12 * 60 * 1000; // 12 minutes
+
 function RootLayout() {
   const { setUser, setAccessToken, setInitialized, isInitialized } = useAuthStore();
 
@@ -22,6 +27,24 @@ function RootLayout() {
       .catch(() => {})
       .finally(setInitialized);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Start proactive token refresh once the app is initialized.
+  // On success: silently update the access token.
+  // On failure: ignore — the 401 interceptor in client.ts will handle it when
+  //             a real request is made, or the user will be redirected to login.
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const id = setInterval(() => {
+      if (!useAuthStore.getState().user) return; // not logged in, skip
+      authApi
+        .refresh()
+        .then((tok) => useAuthStore.getState().setAccessToken(tok.access_token))
+        .catch(() => { /* silent — natural expiry will be handled by the interceptor */ });
+    }, PROACTIVE_REFRESH_MS);
+
+    return () => clearInterval(id);
+  }, [isInitialized]);
 
   return (
     <Suspense fallback={null}>
