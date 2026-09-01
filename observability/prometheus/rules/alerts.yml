@@ -1,0 +1,173 @@
+# Cause-based alerts.
+#
+# These complement the symptom-based SLO burn-rate alerts in slo.yml. Every one
+# of them is either (a) something a user cannot yet feel but will shortly, or
+# (b) a condition the SLO alerts structurally cannot see — e.g. a wedged worker
+# produces no HTTP traffic at all, so no ratio ever moves.
+
+groups:
+  - name: nocturn-availability
+    rules:
+      - alert: NocturnApiDown
+        expr: up{job="nocturn-api"} == 0
+        for: 1m
+        labels:
+          severity: page
+        annotations:
+          summary: "API is not being scraped — process down or unreachable"
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/api-down.md"
+
+      - alert: NocturnWorkerDown
+        expr: up{job="nocturn-worker"} == 0
+        for: 2m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Worker is not being scraped — embeddings and cleanup have stopped"
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/worker-stalled.md"
+
+      - alert: NocturnDependencyDown
+        expr: nocturn_dependency_up == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: "Dependency {{ $labels.dependency }} is unreachable from the API"
+          description: "Readiness probes are failing; this instance should be out of rotation."
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/dependency-down.md"
+
+  - name: nocturn-worker
+    rules:
+      # The worker sleeps for embedding_queue_interval_seconds (30s by default),
+      # so 5 minutes of silence means it is wedged, not idle.
+      - alert: NocturnWorkerStalled
+        expr: time() - nocturn_worker_last_loop_timestamp_seconds > 300
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: "Worker loop has not completed an iteration in over 5 minutes"
+          description: "Last successful loop: {{ $value | humanizeDuration }} ago."
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/worker-stalled.md"
+
+      # The freshness SLI: notes should become searchable within ~60s of a save.
+      # 300s sustained means the queue is not keeping up with writes.
+      - alert: NocturnEmbeddingQueueBacklog
+        expr: nocturn_embedding_queue_oldest_pending_seconds > 300
+        for: 10m
+        labels:
+          severity: ticket
+          slo: freshness
+        annotations:
+          summary: "Oldest pending embedding task is {{ $value | humanizeDuration }} old"
+          description: "Semantic search is returning stale results for recently edited notes."
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/embedding-backlog.md"
+
+      - alert: NocturnEmbeddingTasksFailing
+        expr: nocturn_embedding_queue_tasks{status="failed"} > 0
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "{{ $value }} embedding tasks exhausted their retries"
+          description: "These notes will never become searchable without intervention."
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/embedding-backlog.md"
+
+      # Tasks are handed back to the queue after 15 minutes; a persistent
+      # non-zero `processing` count means the reaper itself is not running.
+      - alert: NocturnEmbeddingTasksStuck
+        expr: nocturn_embedding_queue_tasks{status="processing"} > 0
+        for: 30m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Embedding tasks stuck in `processing` for over 30 minutes"
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/embedding-backlog.md"
+
+  - name: nocturn-llm
+    rules:
+      - alert: NocturnLlmProviderErrors
+        expr: |
+          sum(rate(nocturn_llm_requests_total{outcome="error"}[10m]))
+          /
+          sum(rate(nocturn_llm_requests_total[10m]))
+          > 0.2
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Over 20% of LLM provider calls are failing"
+          description: "Chat and embeddings degrade; notes CRUD is unaffected."
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/llm-provider-outage.md"
+
+      - alert: NocturnLlmTimeToFirstTokenSlow
+        expr: nocturn:llm_ttft:p95 > 5
+        for: 15m
+        labels:
+          severity: ticket
+          slo: ttft
+        annotations:
+          summary: "p95 time-to-first-token is {{ $value | humanizeDuration }} (target: 3s)"
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/llm-provider-outage.md"
+
+  - name: nocturn-rate-limiting
+    rules:
+      # Redis being down silently disables rate limiting on reads. That is the
+      # chosen trade-off, but it must never be silent.
+      - alert: NocturnRateLimiterDegraded
+        expr: sum(rate(nocturn_rate_limit_errors_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Rate limiter cannot reach Redis — reads fail open, writes fail closed"
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/dependency-down.md"
+
+  - name: nocturn-infra
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: page
+        annotations:
+          summary: "Postgres exporter cannot reach the database"
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/dependency-down.md"
+
+      # The API pool (pool_size + max_overflow) times the replica count plus the
+      # worker's pool must stay well under max_connections. Crossing 80% is the
+      # warning that the next scale-up will exhaust the server.
+      - alert: PostgresConnectionsHigh
+        expr: |
+          sum(pg_stat_activity_count)
+          /
+          max(pg_settings_max_connections)
+          > 0.8
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Postgres is at {{ $value | humanizePercentage }} of max_connections"
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/postgres-saturation.md"
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: page
+        annotations:
+          summary: "Redis is unreachable — rate limiting and session state degraded"
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/dependency-down.md"
+
+      - alert: RedisMemoryHigh
+        expr: |
+          redis_memory_used_bytes
+          /
+          (redis_memory_max_bytes > 0)
+          > 0.85
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Redis memory usage is at {{ $value | humanizePercentage }} of maxmemory"
+          runbook_url: "https://github.com/CaseyJohnson-RS/Nocturn/blob/main/docs/runbooks/dependency-down.md"

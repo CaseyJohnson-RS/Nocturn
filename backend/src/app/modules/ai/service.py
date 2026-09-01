@@ -18,7 +18,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import nh3
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.common.exceptions import ConflictError, NotFoundError, ValidationError
@@ -672,7 +671,9 @@ class AIService:
             if not note:
                 return
             title = nh3.clean(data["title"]) if data.get("title") is not None else note.title
-            content = nh3.clean(data["content"]) if data.get("content") is not None else note.content
+            content = (
+                nh3.clean(data["content"]) if data.get("content") is not None else note.content
+            )
             note = await self.notes_repo.update_note(note, title, content)
             await self.rag.index_note(note)
 

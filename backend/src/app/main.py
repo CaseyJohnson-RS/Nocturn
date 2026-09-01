@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 import sys
 from collections.abc import AsyncGenerator
@@ -9,6 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.app.common.database.engine import async_session_factory, engine
 from src.app.common.email import init_email_service
+from src.app.common.observability.logging import setup_logging
+from src.app.common.observability.metrics import set_build_info
+from src.app.common.observability.middleware import ObservabilityMiddleware
 from src.app.common.redis import redis_client
 from src.app.config import settings
 from src.app.middleware.rate_limit import RateLimitMiddleware
@@ -18,14 +22,24 @@ from src.app.modules.auth.router import router as auth_router
 from src.app.modules.notes.router import router as notes_router
 from src.app.modules.profile.router import router as profile_router
 from src.app.modules.rag.router import router as rag_router
+from src.app.modules.system.router import router as system_router
 from src.app.modules.tags.router import router as tags_router
 from src.app.seed import seed_admin
 
+APP_VERSION = "0.1.0"
+
+setup_logging("api")
 logger = logging.getLogger(__name__)
 
 
-# This is bad. I know, but I just don't want to make something smarter
+# Migrations belong to the deploy pipeline, not to application startup: with
+# more than one replica every instance races on `alembic upgrade head`, and a
+# bad migration crash-loops the whole service instead of failing one deploy
+# step. `make migrate` (and the `migrate` compose service) runs this now.
+# RUN_MIGRATIONS_ON_STARTUP=true keeps the old behaviour for single-instance
+# platforms that have no separate release phase.
 def _run_migrations() -> None:
+    logger.info("Running database migrations")
     subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         check=True,
@@ -34,16 +48,23 @@ def _run_migrations() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    # Startup: run migrations and seed admin
-    _run_migrations()
+    set_build_info(service="api", version=APP_VERSION, commit=os.getenv("GIT_COMMIT", "unknown"))
+
+    if os.getenv("RUN_MIGRATIONS_ON_STARTUP", "true").lower() == "true":
+        _run_migrations()
+
     async with async_session_factory() as session:
         await seed_admin(session)
 
     init_email_service()
 
+    logger.info("API startup complete", extra={"version": APP_VERSION})
+
     yield
 
-    # Shutdown
+    # Shutdown: uvicorn has already stopped accepting connections and drained
+    # in-flight requests by this point, so it is safe to close the pools.
+    logger.info("API shutting down, releasing connections")
     await engine.dispose()
     await redis_client.aclose()
 
@@ -149,6 +170,9 @@ app = FastAPI(
 )
 
 app.add_middleware(RateLimitMiddleware)
+# Added last => outermost layer: rate-limit rejections (429) are counted as
+# real responses, and every log line inside the request carries a request_id.
+app.add_middleware(ObservabilityMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_url],
@@ -164,6 +188,7 @@ app.include_router(tags_router)
 app.include_router(rag_router)
 app.include_router(ai_router)
 app.include_router(admin_router)
+app.include_router(system_router)
 
 
 @app.get(

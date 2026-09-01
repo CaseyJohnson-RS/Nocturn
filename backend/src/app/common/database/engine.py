@@ -4,12 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.app.config import settings
 
+# Managed Postgres (Neon) requires TLS; a local or compose Postgres is not
+# built with it and refuses the connection outright. Hardcoding either one
+# breaks the other environment, so it is configuration.
+_connect_args = {"ssl": "require"} if settings.database_ssl_require else {}
+
 engine = create_async_engine(
     settings.database_url,
     echo=settings.database_echo,
     pool_size=settings.database_pool_size,
     max_overflow=settings.database_max_overflow,
-    connect_args={"ssl": "require"},
+    connect_args=_connect_args,
 )
 """
 Async SQLAlchemy engine.

@@ -1,0 +1,322 @@
+{
+  "uid": "nocturn-overview",
+  "title": "Nocturn — Service Overview (RED)",
+  "description": "Rate, Errors, Duration for the API, plus dependency health. First dashboard to open during an incident.",
+  "tags": ["nocturn", "red"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Golden signals",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Availability (1h)",
+      "description": "Share of API requests that were not 5xx. SLO target: 99.5%.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1 - nocturn:availability:error_ratio1h",
+          "legendFormat": "availability"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3,
+          "min": 0.9,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.99 },
+              { "color": "green", "value": 0.995 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "p95 latency (non-AI)",
+      "description": "SLO target: 99% of non-AI requests under 250 ms.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 5, "x": 5, "y": 1 },
+      "targets": [{ "refId": "A", "expr": "nocturn:http_request_duration:p95", "legendFormat": "p95" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.25 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Requests / sec",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 5, "x": 10, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(nocturn_http_requests_total{path!=\"<unmatched>\"}[5m]))",
+          "legendFormat": "rps"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "decimals": 2, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Dependencies",
+      "description": "Result of the /readyz probes. 0 means this instance should be out of rotation.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 15, "y": 1 },
+      "targets": [{ "refId": "A", "expr": "nocturn_dependency_up", "legendFormat": "{{dependency}}" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Open SSE streams",
+      "description": "Long-lived AI chat connections. Each one holds a worker slot.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 5, "x": 19, "y": 1 },
+      "targets": [{ "refId": "A", "expr": "sum(nocturn_sse_active_streams)", "legendFormat": "open" }],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }, { "color": "orange", "value": 50 }] } },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Traffic and errors",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Request rate by status class",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(nocturn_http_requests_total{path!=\"<unmatched>\"}[5m]))",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "fillOpacity": 25, "stacking": { "mode": "normal", "group": "A" }, "lineWidth": 1 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": "5.*" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byRegexp", "options": "429" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency percentiles (non-AI endpoints)",
+      "description": "AI endpoints stream and are excluded; see the TTFT panel on the SLO dashboard.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(nocturn_http_request_duration_seconds_bucket{path!=\"<unmatched>\",path!~\"/api/ai/.*\"}[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(nocturn_http_request_duration_seconds_bucket{path!=\"<unmatched>\",path!~\"/api/ai/.*\"}[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(nocturn_http_request_duration_seconds_bucket{path!=\"<unmatched>\",path!~\"/api/ai/.*\"}[5m])))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2 },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0.25 }] }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Top endpoints by 5xx rate",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(8, sum by (path, method) (rate(nocturn_http_requests_total{status=~\"5..\"}[5m])))",
+          "legendFormat": "{{method}} {{path}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 1 } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Slowest endpoints (p95)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(8, histogram_quantile(0.95, sum by (le, path) (rate(nocturn_http_request_duration_seconds_bucket{path!=\"<unmatched>\"}[5m]))))",
+          "legendFormat": "{{path}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 1 } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "row",
+      "title": "Protection and dependencies",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Rate limit rejections by bucket",
+      "description": "429s returned. A sustained spike is either an attack or a client bug.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 24 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (bucket) (rate(nocturn_rate_limit_rejected_total[5m]))", "legendFormat": "{{bucket}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1, "stacking": { "mode": "normal", "group": "A" } } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Rate limiter degradation",
+      "description": "Redis unreachable: reads fail open (unmetered), writes fail closed (503).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 24 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (outcome) (rate(nocturn_rate_limit_errors_total[5m]))", "legendFormat": "{{outcome}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 30, "lineWidth": 1 } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Postgres connections vs limit",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 24 },
+      "targets": [
+        { "refId": "A", "expr": "sum(pg_stat_activity_count)", "legendFormat": "in use" },
+        { "refId": "B", "expr": "max(pg_settings_max_connections)", "legendFormat": "max_connections" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 1 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "max_connections" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }, { "id": "custom.fillOpacity", "value": 0 }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "row",
+      "title": "Logs",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "logs",
+      "title": "Errors and warnings (all services)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{compose_project=~\".+\"} | json | level =~ \"ERROR|WARNING\"",
+          "queryType": "range"
+        }
+      ],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "dedupStrategy": "none", "enableLogDetails": true }
+    }
+  ]
+}

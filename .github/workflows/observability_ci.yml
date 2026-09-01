@@ -1,0 +1,111 @@
+name: Observability CI
+
+# Monitoring config is code and breaks like code: a typo in a PromQL rule is
+# only discovered during an incident, when nobody gets paged. Validate it in CI.
+
+on:
+  push:
+    paths:
+      - "observability/**"
+      - "docker-compose.observability.yml"
+      - ".github/workflows/observability_ci.yml"
+  pull_request:
+    paths:
+      - "observability/**"
+      - "docker-compose.observability.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Validate Prometheus config and rules
+        run: |
+          docker run --rm -v "${{ github.workspace }}/observability/prometheus:/work" \
+            --entrypoint promtool prom/prometheus:v3.1.0 \
+            check rules /work/rules/slo.yml /work/rules/alerts.yml
+
+      - name: Validate Alertmanager config
+        run: |
+          docker run --rm -v "${{ github.workspace }}/observability/alertmanager:/work" \
+            --entrypoint amtool prom/alertmanager:v0.28.0 \
+            check-config /work/alertmanager.yml
+
+      - name: Every alert must carry a runbook
+        run: |
+          # An alert without a runbook wakes someone up with no instructions.
+          missing=$(python3 - <<'PY'
+          import glob, sys, yaml
+          missing = []
+          for path in glob.glob("observability/prometheus/rules/*.yml"):
+              with open(path) as fh:
+                  doc = yaml.safe_load(fh)
+              for group in doc.get("groups", []):
+                  for rule in group.get("rules", []):
+                      name = rule.get("alert")
+                      if not name:
+                          continue
+                      annotations = rule.get("annotations") or {}
+                      if not annotations.get("runbook_url"):
+                          missing.append(name)
+                      if not (rule.get("labels") or {}).get("severity"):
+                          missing.append(f"{name} (no severity)")
+          print("\n".join(missing))
+          PY
+          )
+          if [ -n "$missing" ]; then
+            echo "Alerts missing runbook_url or severity:"
+            echo "$missing"
+            exit 1
+          fi
+          echo "All alerts have a runbook and a severity."
+
+      - name: Referenced runbooks must exist
+        run: |
+          # Catches renamed or never-written runbook files. A `while` loop in a
+          # pipeline runs in a subshell where `exit 1` would not fail the step,
+          # so collect first and check afterwards.
+          referenced=$(grep -rho 'docs/runbooks/[a-z0-9-]*\.md' observability/prometheus/rules/ | sort -u)
+          status=0
+          for f in $referenced; do
+            if [ -f "$f" ]; then
+              echo "OK $f"
+            else
+              echo "Missing runbook: $f"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Validate Grafana dashboards
+        run: |
+          python3 - <<'PY'
+          import glob, json, sys
+          failed = False
+          for path in glob.glob("observability/grafana/dashboards/*.json"):
+              try:
+                  dashboard = json.load(open(path, encoding="utf-8"))
+              except json.JSONDecodeError as exc:
+                  print(f"INVALID JSON {path}: {exc}")
+                  failed = True
+                  continue
+              for key in ("uid", "title", "panels"):
+                  if key not in dashboard:
+                      print(f"{path}: missing '{key}'")
+                      failed = True
+              print(f"OK {path} ({len(dashboard.get('panels', []))} panels)")
+          sys.exit(1 if failed else 0)
+          PY
+
+      - name: Validate compose files
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.observability.yml config -q
+          echo "Compose files are valid."
+        env:
+          # The app services reference an env file; point at the committed sample.
+          ENVFILE: .env.example

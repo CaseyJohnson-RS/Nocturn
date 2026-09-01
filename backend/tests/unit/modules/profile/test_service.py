@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from argon2 import PasswordHasher
 
-from src.app.common.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
+from src.app.common.exceptions import (
+    ConflictError,
+    NotFoundError,
+    UnauthorizedError,
+    ValidationError,
+)
 from src.app.modules.profile.service import ProfileService
 
 ph = PasswordHasher()

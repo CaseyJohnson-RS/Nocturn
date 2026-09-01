@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(
         description="Max overflow of amount of permanent connections", default=5
     )
+    database_ssl_require: bool = Field(
+        default=False,
+        description="Require TLS to Postgres. True for managed providers (Neon), "
+        "False for a local/compose Postgres that does not speak TLS.",
+    )
 
     # --- Redis ---
     redis_url: str = Field(default="redis://redis:6379/0")
@@ -30,6 +35,13 @@ class Settings(BaseSettings):
     routerai_fetch_model_context_window: bool = Field(default=False)
     routerai_executor_model: str = Field(default="")
     routerai_embedding_model: str = Field(default="")
+    llm_connect_timeout_seconds: float = Field(
+        default=5.0, description="TCP connect timeout for the LLM provider"
+    )
+    llm_read_timeout_seconds: float = Field(
+        default=120.0, description="Read timeout; streaming responses arrive chunk by chunk"
+    )
+    llm_max_retries: int = Field(default=2, description="SDK-level retries on transient errors")
 
     # --- Email ---
     email_provider: str = Field(default="resend", description="resend")
@@ -80,6 +92,13 @@ class Settings(BaseSettings):
     # --- Worker ---
     embedding_queue_interval_seconds: int = Field(default=30)
     cleanup_interval_seconds: int = Field(default=3600)
+
+    # --- Observability ---
+    log_level: str = Field(default="INFO")
+    log_format: str = Field(default="json", description="json | plain")
+    worker_metrics_port: int = Field(
+        default=9101, description="Port the worker exposes /metrics on for Prometheus"
+    )
 
     # --- Rate limiting ---
     rate_auth_per_minute: int = Field(default=20)
