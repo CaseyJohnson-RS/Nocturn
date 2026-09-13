@@ -33,7 +33,7 @@ from src.app.config import settings
 setup_logging("worker")
 logger = logging.getLogger("worker")
 
-engine = create_async_engine(settings.database_url, pool_size=5)
+engine = create_async_engine(settings.database_url, pool_size=5, pool_pre_ping=True)
 session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 _shutdown = asyncio.Event()
@@ -71,9 +71,7 @@ async def refresh_queue_metrics() -> None:
         else:
             # Compare against the database clock, not the worker's.
             now = await session.scalar(text("SELECT now()"))
-            embedding_queue_oldest_pending_seconds.set(
-                max(0.0, (now - oldest_at).total_seconds())
-            )
+            embedding_queue_oldest_pending_seconds.set(max(0.0, (now - oldest_at).total_seconds()))
 
 
 async def requeue_stuck_tasks() -> None:

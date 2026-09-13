@@ -15,6 +15,7 @@ engine = create_async_engine(
     pool_size=settings.database_pool_size,
     max_overflow=settings.database_max_overflow,
     connect_args=_connect_args,
+    pool_pre_ping=True,
 )
 """
 Async SQLAlchemy engine.
