@@ -2,34 +2,20 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
 from openai import AsyncOpenAI
 
-from src.app.common.observability.metrics import observe_llm_call
 from src.app.config import settings
 
 # ---------------------------------------------------------------------------
 # region Client
 
-# Explicit timeouts: the SDK default is 10 minutes, which means one hung
-# provider connection pins a worker slot and an SSE stream for the whole time.
-# `connect` is short (the provider is either reachable or it is not), `read` is
-# generous because streaming responses arrive chunk by chunk.
 client = AsyncOpenAI(
     api_key=settings.routerai_api_key,
     base_url=settings.routerai_base_url,
-    timeout=httpx.Timeout(
-        connect=settings.llm_connect_timeout_seconds,
-        read=settings.llm_read_timeout_seconds,
-        write=settings.llm_read_timeout_seconds,
-        pool=settings.llm_connect_timeout_seconds,
-    ),
-    max_retries=settings.llm_max_retries,
 )
 
 # endregion
@@ -104,11 +90,10 @@ class ChatCompletionAccumulator:
 
 
 async def create_embeddings(texts: list[str]) -> list[list[float]]:
-    with observe_llm_call("embeddings", settings.routerai_embedding_model):
-        resp = await client.embeddings.create(
-            model=settings.routerai_embedding_model,
-            input=texts,
-        )
+    resp = await client.embeddings.create(
+        model=settings.routerai_embedding_model,
+        input=texts,
+    )
     return [item.embedding for item in resp.data]
 
 
@@ -161,30 +146,25 @@ async def chat_completion_stream(
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
 
-    # `state["first_token_at"]` feeds the time-to-first-token histogram, which
-    # is the latency users actually perceive in a streamed chat.
-    with observe_llm_call("chat_stream", model) as state:
-        stream = await client.chat.completions.create(**kwargs) # type: ignore
+    stream = await client.chat.completions.create(**kwargs) # type: ignore
 
-        async for chunk in stream: # type: ignore
-            if not chunk.choices: # type: ignore
-                continue
+    async for chunk in stream: # type: ignore
+        if not chunk.choices: # type: ignore
+            continue
 
-            delta = chunk.choices[0].delta # type: ignore
-            if delta is None:
-                continue
+        delta = chunk.choices[0].delta # type: ignore
+        if delta is None:
+            continue
 
-            if accumulator:
-                content = accumulator.feed_delta(delta)
-                if isinstance(content, str):
-                    state.setdefault("first_token_at", time.perf_counter())
-                    yield content
-                continue
-
-            content = getattr(delta, "content", None) # type: ignore
+        if accumulator:
+            content = accumulator.feed_delta(delta)
             if isinstance(content, str):
-                state.setdefault("first_token_at", time.perf_counter())
                 yield content
+            continue
+
+        content = getattr(delta, "content", None) # type: ignore
+        if isinstance(content, str):
+            yield content
 
 
 # endregion

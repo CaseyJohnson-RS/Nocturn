@@ -15,40 +15,17 @@ services:
   backend:
     build: ./backend
     env_file: ${ENVFILE:-.env}
-    environment:
-      # Container-internal addresses override whatever the env file says: the
-      # env file is written for running tests from the host, where these are
-      # localhost. `environment` wins over `env_file` in compose.
-      DATABASE_URL: postgresql+asyncpg://nocturn:nocturn@postgres:5432/nocturn
-      REDIS_URL: redis://redis:6379/0
-      DATABASE_SSL_REQUIRE: "false"
-      LOG_FORMAT: json
-      GIT_COMMIT: ${GIT_COMMIT:-dev}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      # Liveness only — a readiness check here would make compose consider the
-      # container unhealthy during a database blip and restart a healthy process.
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/livez', timeout=3).status == 200 else 1)\""]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 40s
     restart: unless-stopped
 
   worker:
     build: ./backend
     command: ["uv", "run", "python", "-m", "src.worker.main"]
     env_file: ${ENVFILE:-.env}
-    environment:
-      DATABASE_URL: postgresql+asyncpg://nocturn:nocturn@postgres:5432/nocturn
-      REDIS_URL: redis://redis:6379/0
-      DATABASE_SSL_REQUIRE: "false"
-      LOG_FORMAT: json
-      GIT_COMMIT: ${GIT_COMMIT:-dev}
     depends_on:
       postgres:
         condition: service_healthy

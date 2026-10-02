@@ -8,7 +8,6 @@ from fastapi.responses import JSONResponse
 from starlette.responses import StreamingResponse
 
 from src.app.common.dependencies import DBSession
-from src.app.common.observability.metrics import sse_stream
 from src.app.middleware.auth import AuthUser
 from src.app.modules.ai.schemas import (
     CreateSessionRequest,
@@ -179,15 +178,13 @@ async def send_message(
         return JSONResponse(status_code=error[0], content={"detail": error[1]})
 
     async def event_stream():
-        # Tracks open streams and whether they finished or the client hung up.
-        with sse_stream("send_message"):
-            async for chunk in service.send_message(
-                user.id,
-                session_id,
-                body.content,
-                body.attached_note_ids,
-            ):
-                yield chunk
+        async for chunk in service.send_message(
+            user.id,
+            session_id,
+            body.content,
+            body.attached_note_ids,
+        ):
+            yield chunk
 
     return StreamingResponse(
         event_stream(),
@@ -297,9 +294,8 @@ async def confirm_bulk(
         return JSONResponse(status_code=error[0], content={"detail": error[1]})
 
     async def event_stream():
-        with sse_stream("confirm_bulk"):
-            async for chunk in service.confirm_bulk(user.id, session_id, confirmation_id):
-                yield chunk
+        async for chunk in service.confirm_bulk(user.id, session_id, confirmation_id):
+            yield chunk
 
     return StreamingResponse(
         event_stream(),

@@ -10,12 +10,7 @@ from argon2.exceptions import VerifyMismatchError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.common.email import send_confirmation_email, send_password_reset_email
-from src.app.common.exceptions import (
-    ConflictError,
-    NotFoundError,
-    UnauthorizedError,
-    ValidationError,
-)
+from src.app.common.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
 from src.app.config import settings
 from src.app.modules.auth.models import User
 from src.app.modules.auth.repository import AuthRepository

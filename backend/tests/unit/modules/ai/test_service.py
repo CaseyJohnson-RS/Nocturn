@@ -2,6 +2,7 @@
 
 
 import asyncio
+import json
 import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -9,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.app.common.exceptions import ConflictError, NotFoundError, ValidationError
-from src.app.modules.ai.schemas import SessionResponse
+from src.app.modules.ai.schemas import MessageResponse, SessionResponse
 from src.app.modules.ai.service import (
     AIService,
     _actions_summary_for_context,
@@ -704,7 +705,7 @@ class TestUpdateActionStatus:
         repo.get_message.return_value = msg
         repo.update_message_actions.return_value = msg
 
-        await service.update_action_status(
+        result = await service.update_action_status(
             user_id, session_id, msg.id, action_id, "applied",
         )
 
@@ -1009,7 +1010,7 @@ class TestDismissBulk:
         repo.find_action_by_id.return_value = (msg, confirmation)
         repo.update_message_actions.return_value = msg
 
-        await service.dismiss_bulk(user_id, session_id, cid)
+        result = await service.dismiss_bulk(user_id, session_id, cid)
 
         assert confirmation["status"] == "dismissed"
 

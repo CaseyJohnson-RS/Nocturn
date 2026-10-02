@@ -4,15 +4,11 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from src.app.common.exceptions import RateLimitError
-from src.app.common.observability.metrics import (
-    rate_limit_errors_total,
-    rate_limit_rejected_total,
-)
 from src.app.common.redis import redis_client
 from src.app.config import settings
 
 
-async def _check_rate_limit(key: str, limit: int, bucket: str, window: int = 60) -> None:
+async def _check_rate_limit(key: str, limit: int, window: int = 60) -> None:
     """Sliding window rate limiter using Redis."""
     now = time.time()
     pipe = redis_client.pipeline()
@@ -23,7 +19,6 @@ async def _check_rate_limit(key: str, limit: int, bucket: str, window: int = 60)
     results = await pipe.execute()
     count = results[2]
     if count > limit:
-        rate_limit_rejected_total.labels(bucket=bucket).inc()
         raise RateLimitError("Too many requests")
 
 
@@ -67,14 +62,7 @@ class RateLimitMiddleware:
         path = scope["path"]
         method = scope["method"]
 
-        if method == "OPTIONS" or path in (
-            "/api/health",
-            "/api/docs",
-            "/api/openapi.json",
-            "/livez",
-            "/readyz",
-            "/metrics",
-        ):
+        if method == "OPTIONS" or path in ("/api/health", "/api/docs", "/api/openapi.json"):
             await self.app(scope, receive, send)
             return
 
@@ -86,12 +74,8 @@ class RateLimitMiddleware:
             return
         except Exception:
             if method in ("GET", "HEAD"):
-                # Fail open on reads: availability over enforcement.
-                rate_limit_errors_total.labels(outcome="fail_open").inc()
                 await self.app(scope, receive, send)
                 return
-            # Fail closed on writes: an unmetered write path is worse than a 503.
-            rate_limit_errors_total.labels(outcome="fail_closed").inc()
             response = JSONResponse({"detail": "Service temporarily unavailable"}, status_code=503)
             await response(scope, receive, send)
             return
@@ -103,19 +87,13 @@ class RateLimitMiddleware:
 
         if path.startswith("/api/auth/"):
             if path in ("/api/auth/request-password-reset", "/api/auth/resend-confirmation"):
-                await _check_rate_limit(
-                    f"rl:email:{ip}", settings.rate_email_ops_per_minute, "email"
-                )
+                await _check_rate_limit(f"rl:email:{ip}", settings.rate_email_ops_per_minute)
             elif path in ("/api/auth/confirm-email", "/api/auth/reset-password"):
-                await _check_rate_limit(
-                    f"rl:verify:{ip}", settings.rate_verify_per_minute, "verify"
-                )
+                await _check_rate_limit(f"rl:verify:{ip}", settings.rate_verify_per_minute)
             elif path == "/api/auth/refresh":
-                await _check_rate_limit(
-                    f"rl:refresh:{ip}", settings.rate_refresh_per_minute, "refresh"
-                )
+                await _check_rate_limit(f"rl:refresh:{ip}", settings.rate_refresh_per_minute)
             else:
-                await _check_rate_limit(f"rl:auth:{ip}", settings.rate_auth_per_minute, "auth")
+                await _check_rate_limit(f"rl:auth:{ip}", settings.rate_auth_per_minute)
             return
 
         user_id = _get_user_id(scope)
@@ -123,6 +101,6 @@ class RateLimitMiddleware:
             return
 
         if path.startswith("/api/ai/"):
-            await _check_rate_limit(f"rl:ai:{user_id}", settings.rate_ai_per_minute, "ai")
+            await _check_rate_limit(f"rl:ai:{user_id}", settings.rate_ai_per_minute)
         else:
-            await _check_rate_limit(f"rl:crud:{user_id}", settings.rate_crud_per_minute, "crud")
+            await _check_rate_limit(f"rl:crud:{user_id}", settings.rate_crud_per_minute)
