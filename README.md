@@ -1,7 +1,5 @@
 # Nocturn
 
-**Облачный Markdown-редактор с ИИ-ассистентом, который умеет управлять вашими заметками**
-
 [![Backend CI](https://github.com/CaseyJohnson-RS/Nocturn/actions/workflows/backend_ci.yml/badge.svg)](https://github.com/CaseyJohnson-RS/Nocturn/actions)
 [![Frontend CI](https://github.com/CaseyJohnson-RS/Nocturn/actions/workflows/frontend_ci.yml/badge.svg)](https://github.com/CaseyJohnson-RS/Nocturn/actions)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
@@ -12,40 +10,39 @@
 ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 
+Это полноценное веб приложение для создания и хранения заметок. Создавался как отечественный аналог [Mem.ai](https://mem.ai/).
+
 🌐 **[Открыть демо](https://frontend-uko1.onrender.com/)**
 
----
-
-Nocturn — полноценное веб-приложение для работы с заметками. ИИ-ассистент не просто отвечает на вопросы о ваших записях — он умеет создавать, редактировать и удалять заметки прямо из чата, предлагая изменения на ваше подтверждение.
-
-## Скриншоты
-
-<!-- Скриншот: главный экран — редактор и боковая панель -->
-<!-- ![Главный экран](docs/screenshots/main.png) -->
-
-<!-- GIF: работа ИИ-ассистента — запрос и предложение правки -->
-<!-- ![Демо ИИ-ассистента](docs/screenshots/ai-demo.gif) -->
-
-<!-- Скриншот: семантический поиск -->
-<!-- ![Поиск](docs/screenshots/search.png) -->
-
-## Возможности
+## Главные фишки
 
 ### Редактор заметок
-- Markdown с подсветкой синтаксиса и мгновенным превью (три режима: редактор / превью / split-view)
-- Автосохранение и обнаружение конфликтов редактирования через счётчик версий
+
+- Markdown с мгновенным превью (три режима: редактор / превью / split-view)
+- Автосохранение и обнаружение конфликтов редактирования
 - Система тегов для фильтрации и организации заметок
 - Мягкое удаление в корзину с хранением 30 дней и возможностью восстановления
 
+<img width="1330" height="434" alt="image" src="https://github.com/user-attachments/assets/154c7295-a642-460e-9f7c-9b7b1177bf1d" />
+
+
 ### ИИ-ассистент
-- Чат с потоковой передачей ответов в реальном времени (SSE-стриминг)
+<p align="center">
+  <img
+    src="https://github.com/user-attachments/assets/586e02d8-0cf7-4c70-b077-25e2083e80e4"
+    alt="Chat interface"
+    width="300"
+  />
+</p>
+
+- Чат с потоковой передачей ответов в реальном времени
 - Предложения действий с подтверждением: создать / отредактировать / удалить заметку, добавить или снять теги
 - Массовые операции над несколькими заметками сразу
 - Прикрепление заметок к контексту чата для точных ответов
 - Семантический поиск по смыслу запроса для нахождения релевантных заметок
 
 ### Пользователи и безопасность
-- Регистрация с подтверждением email, сброс пароля
+- Регистрация с подтверждением email, сброс пароля (в демке не работает, но есть демо-аккаунт)
 - JWT-аутентификация с ротацией refresh-токенов
 - Rate limiting по всем группам эндпоинтов
 - Тёмная и светлая темы, интернационализация (RU / EN)
@@ -72,53 +69,6 @@ Nocturn — полноценное веб-приложение для работ
 
 ### JWT + Redis
 Аутентификация через access/refresh токены. Redis используется для rate limiting (скользящее окно по IP) и хранения временных данных сессий.
-
-## Стек технологий
-
-| Слой | Технологии |
-|------|-----------|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, Zustand, TanStack Query, CodeMirror 6, Radix UI |
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic |
-| База данных | PostgreSQL 16 + pgvector |
-| Кеш / Rate limit | Redis |
-| LLM | RouterAI (OpenAI-совместимый API) |
-| Email | Resend |
-| Аутентификация | JWT (PyJWT) + Argon2 |
-| Прокси | Nginx |
-| Контейнеризация | Docker Compose |
-| CI/CD | GitHub Actions → Render |
-
-## Архитектура
-
-```
-                  :80/:443
-                     │
-                   Nginx
-                  ╱     ╲
-          /api/*          /*
-            │              │
-    FastAPI backend    React frontend
-     (Uvicorn:8000)    (static/Nginx:80)
-        │      │
-   PostgreSQL  Redis
-   (pgvector)
-        │
-      Worker
-  (эмбеддинги + очистка)
-```
-
-**Модули бэкенда** следуют единому паттерну `models → repository → service → router → schemas`:
-
-```
-backend/src/app/modules/
-  auth/       Регистрация, вход, JWT, подтверждение email
-  profile/    Никнейм, смена пароля, удаление аккаунта
-  notes/      CRUD, мягкое удаление, теги, версионирование
-  tags/       Пользовательские метки
-  rag/        Чанкинг, эмбеддинги, семантический поиск
-  ai/         Чат-сессии, SSE-стриминг, proposals, bulk-операции
-  admin/      Управление пользователями и ролями
-```
 
 ## Быстрый старт
 
@@ -173,54 +123,6 @@ docker compose up
 docker compose down        # остановить сервисы
 docker compose down -v     # + удалить данные БД
 ```
-
-## Разработка
-
-### Фронтенд (без Docker)
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Vite запускается на `http://localhost:5173` и проксирует `/api/*` на `http://localhost:80`, поэтому Docker-бэкенд должен быть запущен.
-
-### Тестирование
-
-```bash
-# Поднять тестовую инфраструктуру
-docker compose -f docker-compose.test.yml up -d
-
-# Backend — интеграционные + unit тесты
-cd backend && uv run pytest
-
-# Frontend — unit тесты
-cd frontend && npm run test
-```
-
-### Линтер
-
-```bash
-cd frontend && npm run lint
-cd backend && uv run flake8 .
-```
-
-## Переменные окружения
-
-Все переменные задаются в `.env` (загружается Docker Compose). Полный список — в [`.env.example`](.env.example).
-
-| Группа | Переменные |
-|--------|-----------|
-| База данных | `DATABASE_URL`, `DATABASE_POOL_SIZE`, `DATABASE_MAX_OVERFLOW` |
-| Redis | `REDIS_URL` |
-| JWT | `JWT_SECRET`, `ACCESS_TOKEN_TTL_MINUTES`, `REFRESH_TOKEN_TTL_DAYS` |
-| RouterAI | `ROUTERAI_API_KEY`, `ROUTERAI_BASE_URL`, `ROUTERAI_LLM_MODEL`, `ROUTERAI_EXECUTOR_MODEL`, `ROUTERAI_EMBEDDING_MODEL` |
-| Email (Resend) | `EMAIL_PROVIDER`, `EMAIL_API_KEY`, `EMAIL_FROM` |
-| Сид администратора | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NICKNAME` |
-| Лимиты | `MAX_NOTES_PER_USER`, `MAX_CHAT_SESSIONS_PER_USER`, `TRASH_RETENTION_DAYS` и др. |
-| Rate limiting | `RATE_AUTH_PER_MINUTE`, `RATE_CRUD_PER_MINUTE`, `RATE_AI_PER_MINUTE` и др. |
-| Воркер | `EMBEDDING_QUEUE_INTERVAL_SECONDS`, `CLEANUP_INTERVAL_SECONDS` |
 
 ## Структура проекта
 
